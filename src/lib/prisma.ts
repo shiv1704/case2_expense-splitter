@@ -5,7 +5,9 @@ import { PrismaClient } from "../generated/prisma/client";
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
 
 function createPrismaClient() {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  // Strip ?pgbouncer=true — that flag is a Prisma CLI hint, not a valid pg startup parameter
+  const connectionString = (process.env.DATABASE_URL ?? "").replace("?pgbouncer=true", "");
+  const pool = new Pool({ connectionString });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 }
