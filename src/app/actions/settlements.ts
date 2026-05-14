@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 
 export async function settleUp(
@@ -8,11 +8,7 @@ export async function settleUp(
   toUserId: string,
   amount: number
 ): Promise<{ error: string | null }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const user = await getAuthUser();
   if (!user) return { error: "Not authenticated" };
 
   const isMember = await prisma.groupMember.findUnique({

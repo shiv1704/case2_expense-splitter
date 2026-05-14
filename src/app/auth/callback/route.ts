@@ -22,16 +22,17 @@ export async function GET(request: Request) {
 
   const { id, email } = data.user;
 
-  // Ensure a User row exists in Postgres on first login.
-  await prisma.user.upsert({
-    where: { email: email! },
-    update: {},
-    create: {
-      id,
-      email: email!,
-      name: email!.split("@")[0],
-    },
-  });
+  try {
+    await prisma.user.upsert({
+      where: { email: email! },
+      update: {},
+      create: { id, email: email!, name: email!.split("@")[0] },
+    });
+  } catch {
+    return NextResponse.redirect(
+      `${origin}/login?error=${encodeURIComponent("Database error saving new user")}`
+    );
+  }
 
   return NextResponse.redirect(`${origin}${next}`);
 }

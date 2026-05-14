@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { SplitType } from "@/generated/prisma/enums";
 
@@ -14,10 +14,7 @@ export async function addExpense(
   groupId: string,
   formData: FormData
 ): Promise<{ error: string | null }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) return { error: "Not authenticated" };
 
   // --- Parse inputs ---
