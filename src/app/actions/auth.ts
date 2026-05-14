@@ -5,17 +5,21 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 
-export async function signIn(formData: FormData) {
+export async function signIn(
+  _prevState: { error: string | null },
+  formData: FormData
+): Promise<{ error: string | null }> {
   const email    = (formData.get("email")    as string).trim();
-  const password = (formData.get("password") as string).trim();
+  const password = (formData.get("password") as string);
   const supabase = await createClient();
 
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error || !data.user) {
-    redirect(`/login?error=${encodeURIComponent(error?.message ?? "Invalid email or password")}`);
+    return { error: error?.message ?? "Invalid email or password" };
   }
 
+  // Ensure a matching Prisma User row exists (non-fatal if it fails)
   try {
     await prisma.user.upsert({
       where:  { email: data.user.email! },
@@ -26,9 +30,7 @@ export async function signIn(formData: FormData) {
         name:  data.user.email!.split("@")[0],
       },
     });
-  } catch {
-    // Non-fatal — user may already exist; continue
-  }
+  } catch { /* user record already exists */ }
 
   redirect("/dashboard");
 }
@@ -56,7 +58,7 @@ export async function register(formData: FormData) {
     await prisma.user.upsert({
       where:  { email },
       update: { name },
-      create: { id: data.user.id, email, name },
+      create: { id: data.user!.id, email, name },
     });
   } catch {
     redirect(`/register?error=${encodeURIComponent("Database error creating user")}`);

@@ -1,13 +1,12 @@
+"use client";
+
 import Link from "next/link";
+import { useActionState } from "react";
 import { signIn } from "@/app/actions/auth";
 import { loginAsDemo } from "@/app/actions/demo";
 
-type Props = {
-  searchParams: Promise<{ error?: string; next?: string }>;
-};
-
-export default async function LoginPage({ searchParams }: Props) {
-  const params = await searchParams;
+export default function LoginPage() {
+  const [state, formAction, pending] = useActionState(signIn, { error: null });
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#F7F8FA] px-4 py-12">
@@ -22,13 +21,13 @@ export default async function LoginPage({ searchParams }: Props) {
         <div className="rounded-2xl border border-[#E5E7EB] bg-white p-8 shadow-sm">
           <h2 className="mb-6 text-xl font-bold text-[#1A1A2E]">Sign in</h2>
 
-          {params.error && (
+          {state.error && (
             <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-[#EF4444]">
-              {params.error}
+              {state.error}
             </div>
           )}
 
-          <form action={signIn} className="space-y-4">
+          <form action={formAction} className="space-y-4">
             <div>
               <label
                 htmlFor="email"
@@ -65,9 +64,10 @@ export default async function LoginPage({ searchParams }: Props) {
             </div>
             <button
               type="submit"
-              className="w-full rounded-lg bg-[#1B7DF0] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1567CC] focus:outline-none focus:ring-2 focus:ring-[#1B7DF0]/40"
+              disabled={pending}
+              className="w-full rounded-lg bg-[#1B7DF0] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1567CC] disabled:opacity-60"
             >
-              Sign in
+              {pending ? "Signing in…" : "Sign in"}
             </button>
           </form>
 
