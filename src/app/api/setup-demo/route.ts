@@ -1,15 +1,16 @@
 /**
- * One-time setup route: creates Supabase Auth accounts for the three demo
- * users so they can log in with email + password.
+ * One-time (idempotent) setup route: ensures the three demo users exist in
+ * Supabase Auth with a known password so the email+password form works.
  *
- * Requires SUPABASE_SERVICE_ROLE_KEY in env (Supabase dashboard →
+ * Requires SUPABASE_SERVICE_ROLE_KEY in env (Supabase Dashboard →
  * Settings → API → "service_role secret").
  *
- * ALSO: Go to Supabase Dashboard → Authentication → Providers → Email →
- * turn OFF "Confirm email" so sign-ups don't need email verification.
+ * NOTE: Go to Supabase Dashboard → Authentication → Providers → Email →
+ * turn OFF "Confirm email" so new sign-ups don't require email verification.
+ * (Existing demo users are already confirmed, so this only affects new users.)
  *
  * Hit once after deploying: GET /api/setup-demo
- * Idempotent — safe to call multiple times.
+ * Safe to call repeatedly — creates or resets each demo account.
  */
 
 import { NextResponse } from "next/server";
@@ -46,7 +47,7 @@ export async function GET() {
     );
   }
 
-  const supabaseAdmin = createClient(
+  const admin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     serviceRoleKey,
     { auth: { autoRefreshToken: false, persistSession: false } }
@@ -56,35 +57,43 @@ export async function GET() {
 
   for (const demo of DEMO_USERS) {
     try {
-      // Pin the UUID so it matches existing seeded data in Prisma.
-      // The REST API accepts `id`; cast needed because the TS types omit it.
-      const { data, error } = await supabaseAdmin.auth.admin.createUser({
-        ...(demo as unknown as Record<string, unknown>),
-        email_confirm: true,
-      } as Parameters<typeof supabaseAdmin.auth.admin.createUser>[0]);
+      // Try to create first (pins the UUID via the REST body)
+      const { data: created, error: createErr } = await admin.auth.admin.createUser(
+        { id: demo.id, email: demo.email, password: demo.password, email_confirm: true } as Parameters<
+          typeof admin.auth.admin.createUser
+        >[0]
+      );
 
-      const alreadyExists =
-        error?.message?.toLowerCase().includes("already") ||
-        error?.message?.toLowerCase().includes("duplicate");
-
-      if (error && !alreadyExists) {
-        results.push({ email: demo.email, status: "error", message: error.message });
+      if (!createErr) {
+        // Newly created
+        await prisma.user.upsert({
+          where:  { id: demo.id },
+          update: { email: demo.email, name: demo.name },
+          create: { id: demo.id, email: demo.email, name: demo.name },
+        });
+        results.push({ email: demo.email, status: "created", id: created?.user?.id });
         continue;
       }
 
-      // Upsert Prisma record — use the UUID Supabase assigned (should equal demo.id).
-      const authId = data?.user?.id ?? demo.id;
-      await prisma.user.upsert({
-        where: { id: authId },
-        update: { email: demo.email, name: demo.name },
-        create: { id: authId, email: demo.email, name: demo.name },
+      // User already exists — update the password and email to ensure they're correct
+      const { error: updateErr } = await admin.auth.admin.updateUserById(demo.id, {
+        email: demo.email,
+        password: demo.password,
+        email_confirm: true,
       });
 
-      results.push({
-        email: demo.email,
-        status: alreadyExists ? "already_exists" : "created",
-        id: authId,
+      if (updateErr) {
+        results.push({ email: demo.email, status: "error", message: updateErr.message });
+        continue;
+      }
+
+      await prisma.user.upsert({
+        where:  { id: demo.id },
+        update: { email: demo.email, name: demo.name },
+        create: { id: demo.id, email: demo.email, name: demo.name },
       });
+
+      results.push({ email: demo.email, status: "updated" });
     } catch (err) {
       results.push({ email: demo.email, status: "error", message: String(err) });
     }
