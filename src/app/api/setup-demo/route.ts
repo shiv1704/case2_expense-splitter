@@ -1,18 +1,15 @@
 /**
- * One-time (idempotent) setup route: ensures the three demo users exist in
- * Supabase Auth with a known password so the email+password form works.
+ * One-time (idempotent) setup route: ensures demo users exist in Supabase Auth.
  *
- * Requires SUPABASE_SERVICE_ROLE_KEY in env (Supabase Dashboard →
- * Settings → API → "service_role secret").
+ * GET /api/setup-demo        — creates / resets demo accounts
+ * GET /api/setup-demo?debug  — shows raw admin API responses for diagnosis
  *
- * NOTE: Go to Supabase Dashboard → Authentication → Providers → Email →
- * turn OFF "Confirm email" so new sign-ups don't require email verification.
- *
- * Hit once after deploying: GET /api/setup-demo
- * Safe to call repeatedly — upserts each demo account via the Admin REST API.
+ * Requires SUPABASE_SERVICE_ROLE_KEY in env.
+ * NOTE: Supabase Dashboard → Authentication → Providers → Email → turn OFF
+ * "Confirm email" so new sign-ups don't need email verification.
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 const DEMO_USERS = [
@@ -21,65 +18,84 @@ const DEMO_USERS = [
   { id: "33333333-3333-4333-8333-333333333333", email: "charlie@demo.com", name: "Charlie", password: "demo1234" },
 ];
 
-async function adminFetch(path: string, method: string, body: object) {
-  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/${path}`;
+function adminHeaders() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  const res = await fetch(url, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${key}`,
-      apikey: key,
-    },
-    body: JSON.stringify(body),
-  });
-  const json = await res.json() as Record<string, unknown>;
-  return { ok: res.ok, status: res.status, json };
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${key}`,
+    apikey: key,
+  };
 }
 
-export async function GET() {
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+function adminUrl(path: string) {
+  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/${path}`;
+}
+
+export async function GET(req: NextRequest) {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) {
     return NextResponse.json({ error: "SUPABASE_SERVICE_ROLE_KEY is not set" }, { status: 500 });
+  }
+
+  // Debug mode: show raw responses without making changes
+  if (req.nextUrl.searchParams.has("debug")) {
+    const debug = [];
+    for (const demo of DEMO_USERS) {
+      const getRes = await fetch(adminUrl(`users/${demo.id}`), { headers: adminHeaders() });
+      const getBody = await getRes.json();
+      debug.push({ email: demo.email, id: demo.id, status: getRes.status, body: getBody });
+    }
+    return NextResponse.json({ debug });
   }
 
   const results = [];
 
   for (const demo of DEMO_USERS) {
     try {
-      // Try to create first (pins the UUID via the Admin REST API body)
-      const create = await adminFetch("users", "POST", {
-        id: demo.id,
-        email: demo.email,
-        password: demo.password,
-        email_confirm: true,
+      // Try creating first (POST pins UUID via body)
+      const postRes = await fetch(adminUrl("users"), {
+        method: "POST",
+        headers: adminHeaders(),
+        body: JSON.stringify({ id: demo.id, email: demo.email, password: demo.password, email_confirm: true }),
       });
+      const postBody = await postRes.json() as Record<string, unknown>;
 
-      if (!create.ok) {
-        // User likely already exists — update password + email instead
-        const update = await adminFetch(`users/${demo.id}`, "PUT", {
-          email: demo.email,
-          password: demo.password,
-          email_confirm: true,
+      if (postRes.ok) {
+        await prisma.user.upsert({
+          where:  { id: demo.id },
+          update: { email: demo.email, name: demo.name },
+          create: { id: demo.id, email: demo.email, name: demo.name },
         });
-
-        if (!update.ok) {
-          results.push({
-            email: demo.email,
-            status: "error",
-            message: (update.json.msg ?? update.json.message ?? JSON.stringify(update.json)) as string,
-          });
-          continue;
-        }
+        results.push({ email: demo.email, status: "created" });
+        continue;
       }
 
-      // Ensure Prisma User row matches
+      // User exists — update via PUT
+      const putRes = await fetch(adminUrl(`users/${demo.id}`), {
+        method: "PUT",
+        headers: adminHeaders(),
+        body: JSON.stringify({ email: demo.email, password: demo.password, email_confirm: true }),
+      });
+      const putBody = await putRes.json() as Record<string, unknown>;
+
+      if (!putRes.ok) {
+        results.push({
+          email: demo.email,
+          status: "error",
+          createStatus: postRes.status,
+          createError: postBody,
+          putStatus: putRes.status,
+          putError: putBody,
+        });
+        continue;
+      }
+
       await prisma.user.upsert({
         where:  { id: demo.id },
         update: { email: demo.email, name: demo.name },
         create: { id: demo.id, email: demo.email, name: demo.name },
       });
-
-      results.push({ email: demo.email, status: create.ok ? "created" : "updated" });
+      results.push({ email: demo.email, status: "updated" });
     } catch (err) {
       results.push({ email: demo.email, status: "error", message: String(err) });
     }
