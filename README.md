@@ -1,36 +1,88 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Pocket — Roommate Expense Splitter
 
-## Getting Started
+A web app where users create groups, add expenses with unequal splits, see minimized settlement balances, and settle up with a full audit trail. All data persists in Postgres (Supabase).
 
-First, run the development server:
+## Stack
+
+- **Next.js 16** App Router + TypeScript
+- **Tailwind CSS**
+- **Supabase** — Postgres + Auth (magic link)
+- **Prisma 7** ORM with `@prisma/adapter-pg`
+- **Vercel** deployment
+
+## Features
+
+- Magic-link authentication (no passwords for end users)
+- Create groups with shareable invite codes
+- Add expenses with three split modes: Equal, Percentage, Fixed
+- Greedy min-transaction netting algorithm — minimizes the number of payments needed to settle a group
+- Settle Up button (visible only to the debtor) creates an auditable Settlement record
+- Balance tab shows net positions, suggested settlements, and full payment history
+
+## Demo group
+
+| Email | Name | Password |
+|---|---|---|
+| jerry@demo.com | Alice | demo1234 |
+| bob@demo.com | Bob | demo1234 |
+| charlie@demo.com | Charlie | demo1234 |
+
+Group: **Emirates 4B** · invite code `DEMO42`
+
+## Getting started
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Running tests
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm test
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The unit test suite covers the netting algorithm across two-person, three-person, multi-creditor/debtor, and floating-point edge cases.
 
-## Learn More
+## Seeding
 
-To learn more about Next.js, take a look at the following resources:
+The demo data is pre-seeded. To re-seed a fresh database:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npx prisma db seed
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+> Requires a direct Postgres connection on port 5432. If your network blocks it (common on Supabase free tier), apply `prisma/seed.ts` via the Supabase Dashboard SQL editor instead.
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Future: International Currency Handling
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+To support multi-currency groups, each expense would store a `currency` field and an `fx_rate_at_creation` (fetched from an ECB / fixer.io snapshot at the moment the expense is submitted). Balances settle in the group's **base currency**. Historic rates must be locked at expense creation time — never recomputed — to prevent balance drift as exchange rates move.
+
+### Schema additions
+
+```prisma
+model Group {
+  base_currency String @default("USD") // ISO 4217
+}
+
+model Expense {
+  currency           String  @default("USD")
+  fx_rate_at_creation Decimal @db.Decimal(18, 8)
+  // rate = 1 unit of expense.currency expressed in group.base_currency
+  // e.g. expense in JPY, group base USD → fx_rate ≈ 0.00670
+}
+```
+
+### Netting impact
+
+`computeGroupBalances` must multiply each split amount by `fx_rate_at_creation` before summing, so every contribution is expressed in the base currency before the greedy algorithm runs. Split amounts stored on `ExpenseSplit` remain in the original currency for display; only the balance aggregation converts them.
+
+### Rate fetching
+
+The FX rate is fetched server-side inside the `addExpense` server action — never client-side — to prevent manipulation. ECB provides free daily rates with EUR as the base; Open Exchange Rates / fixer.io cover arbitrary base currencies on paid tiers.
+
+### Why lock at creation
+
+Recomputing historic rates when exchange rates move would cause a group's total balance to drift over time without any new expenses being added — members could end up owing different amounts week to week for the same trip. Locking the rate makes the ledger append-only and auditable, matching how accounting systems handle multi-currency transactions.
