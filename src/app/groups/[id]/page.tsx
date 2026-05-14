@@ -5,9 +5,11 @@ import { getAuthUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { computeGroupBalances } from "@/lib/balances";
 import { minimizeTransactions } from "@/lib/netting";
+import { formatINR } from "@/lib/format";
 import { AddExpenseForm } from "./add-expense-form";
 import { BalancesTab } from "./balances-tab";
 import { CopyInviteButton } from "./copy-invite-button";
+import { GroupSettings } from "./group-settings";
 import { ActivityTab, type ActivityEvent } from "./activity-tab";
 
 type Props = {
@@ -26,14 +28,15 @@ function getCategoryEmoji(title: string): string {
   if (t.includes("rent") || t.includes("house") || t.includes("apartment")) return "🏠";
   if (t.includes("groceri") || t.includes("market") || t.includes("supermarket")) return "🛒";
   if (t.includes("electric") || t.includes("power") || t.includes("utility")) return "⚡";
-  if (t.includes("dinner") || t.includes("lunch") || t.includes("breakfast") || t.includes("restaurant") || t.includes("pizza") || t.includes("food")) return "🍕";
-  if (t.includes("internet") || t.includes("wifi") || t.includes("network")) return "📡";
+  if (t.includes("zomato") || t.includes("swiggy") || t.includes("dinner") || t.includes("lunch") || t.includes("breakfast") || t.includes("restaurant") || t.includes("pizza") || t.includes("food")) return "🍕";
+  if (t.includes("internet") || t.includes("wifi") || t.includes("network") || t.includes("broadband")) return "📡";
   if (t.includes("netflix") || t.includes("movie") || t.includes("hulu") || t.includes("streaming") || t.includes("tv")) return "📺";
-  if (t.includes("uber") || t.includes("taxi") || t.includes("car") || t.includes("gas") || t.includes("petrol")) return "🚗";
+  if (t.includes("ola") || t.includes("uber") || t.includes("taxi") || t.includes("cab") || t.includes("car") || t.includes("gas") || t.includes("petrol")) return "🚗";
   if (t.includes("flight") || t.includes("hotel") || t.includes("travel") || t.includes("airbnb")) return "✈️";
-  if (t.includes("shop") || t.includes("amazon") || t.includes("mall")) return "🛍️";
+  if (t.includes("shop") || t.includes("amazon") || t.includes("mall") || t.includes("washing") || t.includes("soap") || t.includes("powder")) return "🛍️";
   if (t.includes("medicine") || t.includes("pharmacy") || t.includes("doctor")) return "💊";
   if (t.includes("coffee") || t.includes("cafe") || t.includes("starbucks")) return "☕";
+  if (t.includes("gas cylinder") || t.includes("cylinder") || t.includes("lpg")) return "🔥";
   return "🧾";
 }
 
@@ -41,7 +44,7 @@ function groupByMonth<T extends { created_at: Date }>(expenses: T[]) {
   const map = new Map<string, T[]>();
   for (const exp of expenses) {
     const key = new Date(exp.created_at)
-      .toLocaleDateString("en-US", { month: "long", year: "numeric" })
+      .toLocaleDateString("en-IN", { month: "long", year: "numeric" })
       .toUpperCase();
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(exp);
@@ -132,10 +135,11 @@ export default async function GroupPage({ params, searchParams }: Props) {
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const tabs = ["expenses", "balances", "activity"] as const;
+  const isCreator = group.created_by === user!.id;
 
   return (
     <div className="-mx-4 sm:-mx-6 lg:-mx-8">
-      {/* Full-width blue gradient header */}
+      {/* Full-width gradient header */}
       <div className="bg-gradient-to-br from-[#1B7DF0] to-[#0EA5E9] px-4 py-8 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-5xl">
           <Link
@@ -155,7 +159,15 @@ export default async function GroupPage({ params, searchParams }: Props) {
                 </span>
               </div>
             </div>
-            <CopyInviteButton code={group.invite_code} />
+            {/* Invite code + settings */}
+            <div className="flex items-center gap-2">
+              <CopyInviteButton code={group.invite_code} />
+              <GroupSettings
+                groupId={id}
+                groupName={group.name}
+                isCreator={isCreator}
+              />
+            </div>
           </div>
 
           {/* My balance chip */}
@@ -168,8 +180,8 @@ export default async function GroupPage({ params, searchParams }: Props) {
               }`}
             >
               {myBalance.netBalance > 0
-                ? `You are owed $${myBalance.netBalance.toFixed(2)}`
-                : `You owe $${Math.abs(myBalance.netBalance).toFixed(2)}`}
+                ? `You are owed ${formatINR(myBalance.netBalance)}`
+                : `You owe ${formatINR(Math.abs(myBalance.netBalance))}`}
             </div>
           )}
         </div>
@@ -198,7 +210,7 @@ export default async function GroupPage({ params, searchParams }: Props) {
 
       {/* Page body */}
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Members */}
+        {/* Members — pills without letter avatars */}
         <section className="mb-8">
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
             Members
@@ -207,17 +219,12 @@ export default async function GroupPage({ params, searchParams }: Props) {
             {group.members.map(({ user: member }) => (
               <li
                 key={member.id}
-                className="flex items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 py-1.5"
+                className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1.5 text-sm text-[#1A1A2E]"
               >
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1B7DF0]/10 text-xs font-bold text-[#1B7DF0]">
-                  {member.name[0].toUpperCase()}
-                </span>
-                <span className="text-sm text-[#1A1A2E]">
-                  {member.name}
-                  {member.id === user!.id && (
-                    <span className="ml-1 text-[#6B7280]">(you)</span>
-                  )}
-                </span>
+                {member.name}
+                {member.id === user!.id && (
+                  <span className="ml-1 text-[#6B7280]">(you)</span>
+                )}
               </li>
             ))}
           </ul>
@@ -236,7 +243,6 @@ export default async function GroupPage({ params, searchParams }: Props) {
           <ActivityTab events={activityEvents} />
         ) : (
           <section>
-            {/* Expenses header */}
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
                 {expenses.length} {expenses.length === 1 ? "expense" : "expenses"}
@@ -267,7 +273,6 @@ export default async function GroupPage({ params, searchParams }: Props) {
                             className="rounded-xl border border-[#E5E7EB] bg-white p-4 transition hover:shadow-sm"
                           >
                             <div className="flex flex-wrap items-start gap-3">
-                              {/* Emoji category icon */}
                               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F7F8FA] text-xl">
                                 {emoji}
                               </div>
@@ -283,18 +288,18 @@ export default async function GroupPage({ params, searchParams }: Props) {
                                       <span>·</span>
                                       <span>
                                         {new Date(expense.created_at).toLocaleDateString(
-                                          "en-US",
+                                          "en-IN",
                                           { month: "short", day: "numeric" }
                                         )}
                                       </span>
                                       <span>·</span>
-                                      <span className="rounded bg-[#F7F8FA] px-1.5 py-0.5 font-medium text-[#6B7280]">
+                                      <span className="rounded bg-[#F7F8FA] px-1.5 py-0.5 font-medium">
                                         {SPLIT_LABEL[expense.split_type]}
                                       </span>
                                     </div>
                                   </div>
-                                  <span className="text-lg font-bold tabular-nums text-[#1A1A2E]">
-                                    ${Number(expense.total_amount).toFixed(2)}
+                                  <span className="text-base font-bold tabular-nums text-[#1A1A2E]">
+                                    {formatINR(Number(expense.total_amount))}
                                   </span>
                                 </div>
 
@@ -319,7 +324,7 @@ export default async function GroupPage({ params, searchParams }: Props) {
                                         )}
                                       </span>
                                       <span className="ml-2 shrink-0 tabular-nums text-[#1A1A2E]">
-                                        ${Number(split.amount).toFixed(2)}
+                                        {formatINR(Number(split.amount))}
                                         {split.percentage !== null && (
                                           <span className="ml-1 text-[#6B7280]">
                                             ({Number(split.percentage).toFixed(0)}%)
@@ -343,7 +348,6 @@ export default async function GroupPage({ params, searchParams }: Props) {
         )}
       </div>
 
-      {/* FAB — only on expenses tab */}
       {tab === "expenses" && (
         <AddExpenseForm groupId={id} members={members} variant="fab" />
       )}

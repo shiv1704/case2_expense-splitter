@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { Users } from "lucide-react";
+import { Users, ReceiptText } from "lucide-react";
 import { getAuthUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { computeGroupBalances } from "@/lib/balances";
+import { formatINR } from "@/lib/format";
 
 const GROUP_COLORS = [
   "#1B7DF0",
@@ -20,6 +21,18 @@ function groupColor(name: string) {
   return GROUP_COLORS[Math.abs(hash)];
 }
 
+function timeAgo(date: Date): string {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return date.toLocaleDateString("en-IN", { month: "short", day: "numeric" });
+}
+
 export default async function DashboardPage() {
   const user = await getAuthUser();
 
@@ -33,27 +46,40 @@ export default async function DashboardPage() {
     orderBy: { joined_at: "desc" },
   });
 
-  const groupBalances = await Promise.all(
-    memberships.map(async ({ group }) => {
-      const balances = await computeGroupBalances(group.id);
-      const mine = balances.find((b) => b.userId === user!.id);
-      return { groupId: group.id, balance: mine?.netBalance ?? 0 };
-    })
-  );
+  const groupIds = memberships.map((m) => m.group.id);
 
-  const totalBalance = groupBalances.reduce((sum, g) => sum + g.balance, 0);
+  const [groupBalancesRaw, recentExpenses] = await Promise.all([
+    Promise.all(
+      memberships.map(async ({ group }) => {
+        const balances = await computeGroupBalances(group.id);
+        const mine = balances.find((b) => b.userId === user!.id);
+        return { groupId: group.id, balance: mine?.netBalance ?? 0 };
+      })
+    ),
+    groupIds.length > 0
+      ? prisma.expense.findMany({
+          where: { group_id: { in: groupIds } },
+          include: {
+            group: { select: { id: true, name: true } },
+            payer: { select: { id: true, name: true } },
+          },
+          orderBy: { created_at: "desc" },
+          take: 5,
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const totalBalance = groupBalancesRaw.reduce((sum, g) => sum + g.balance, 0);
   const balanceByGroup = Object.fromEntries(
-    groupBalances.map((g) => [g.groupId, g.balance])
+    groupBalancesRaw.map((g) => [g.groupId, g.balance])
   );
 
   return (
     <div>
-      {/* Hero card — always blue gradient, balance shown inside */}
+      {/* Hero card — blue gradient */}
       <div
         className="mb-8 rounded-2xl p-6 text-white"
-        style={{
-          background: "linear-gradient(135deg, #1B7DF0 0%, #0EA5E9 100%)",
-        }}
+        style={{ background: "linear-gradient(135deg, #1B7DF0 0%, #0EA5E9 100%)" }}
       >
         <p className="text-sm font-medium text-white/70">Overall balance</p>
         <div className="mt-3 flex items-end justify-between gap-4">
@@ -62,8 +88,8 @@ export default async function DashboardPage() {
               {Math.abs(totalBalance) <= 0.005
                 ? "All settled up 🎉"
                 : totalBalance > 0
-                ? `+$${totalBalance.toFixed(2)}`
-                : `-$${Math.abs(totalBalance).toFixed(2)}`}
+                ? `+${formatINR(totalBalance)}`
+                : `-${formatINR(Math.abs(totalBalance))}`}
             </p>
             {Math.abs(totalBalance) > 0.005 && (
               <p className="mt-1 text-sm text-white/70">
@@ -82,7 +108,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Header */}
+      {/* Header row */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-[#1A1A2E]">Your groups</h1>
         <div className="flex gap-2">
@@ -127,60 +153,119 @@ export default async function DashboardPage() {
           </div>
         </div>
       ) : (
-        <ul className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {memberships.map(({ group }) => {
-            const bal = balanceByGroup[group.id] ?? 0;
-            const color = groupColor(group.name);
-            return (
-              <li key={group.id}>
-                <Link
-                  href={`/groups/${group.id}`}
-                  className="flex flex-col gap-4 rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:-translate-y-0.5 hover:border-transparent hover:shadow-lg"
+        <>
+          {/* Groups — full-width list rows */}
+          <ul className="mt-4 overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white">
+            {memberships.map(({ group }, idx) => {
+              const bal = balanceByGroup[group.id] ?? 0;
+              const color = groupColor(group.name);
+              return (
+                <li
+                  key={group.id}
+                  className={idx > 0 ? "border-t border-[#E5E7EB]" : undefined}
                 >
-                  <div className="flex items-start gap-3">
-                    {/* Colored avatar square */}
+                  <Link
+                    href={`/groups/${group.id}`}
+                    className="flex items-center gap-4 px-5 py-4 transition hover:bg-[#F7F8FA]"
+                  >
+                    {/* Colored 40px square avatar */}
                     <div
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg font-bold text-white"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base font-bold text-white"
                       style={{ backgroundColor: color }}
                     >
                       {group.name[0].toUpperCase()}
                     </div>
+
+                    {/* Center: name + meta */}
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold text-[#1A1A2E]">
+                      <p className="text-base font-bold text-[#1A1A2E]">
                         {group.name}
                       </p>
-                      <p className="flex items-center gap-1 text-xs text-[#6B7280]">
-                        <Users className="h-3 w-3" />
+                      <p className="mt-0.5 text-[13px] text-[#6B7280]">
+                        <Users className="mr-1 inline h-3 w-3" />
                         {group._count.members}{" "}
                         {group._count.members === 1 ? "member" : "members"}
+                        <span className="mx-1.5">·</span>
+                        <span className="font-mono">#{group.invite_code}</span>
                       </p>
                     </div>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-[#F7F8FA] pt-3">
-                    <span className="font-mono text-xs text-[#6B7280]">
-                      #{group.invite_code}
-                    </span>
-                    {Math.abs(bal) > 0.005 ? (
-                      <span
-                        className={`text-sm font-bold tabular-nums ${
-                          bal > 0 ? "text-[#10B981]" : "text-[#EF4444]"
-                        }`}
-                      >
-                        {bal > 0
-                          ? `+$${bal.toFixed(2)}`
-                          : `-$${Math.abs(bal).toFixed(2)}`}
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-[#10B981]/10 px-2 py-0.5 text-xs font-medium text-[#10B981]">
-                        settled ✓
-                      </span>
-                    )}
-                  </div>
+
+                    {/* Right: balance */}
+                    <div className="text-right">
+                      {Math.abs(bal) > 0.005 ? (
+                        <>
+                          <p
+                            className={`text-[18px] font-bold tabular-nums ${
+                              bal > 0 ? "text-[#10B981]" : "text-[#EF4444]"
+                            }`}
+                          >
+                            {formatINR(Math.abs(bal))}
+                          </p>
+                          <p className="text-xs text-[#6B7280]">
+                            {bal > 0 ? "you are owed" : "you owe"}
+                          </p>
+                        </>
+                      ) : (
+                        <span className="rounded-full bg-[#10B981]/10 px-2.5 py-1 text-xs font-medium text-[#10B981]">
+                          settled ✓
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* Recent Activity */}
+          {recentExpenses.length > 0 && (
+            <section className="mt-8">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-[#1A1A2E]">
+                  Recent Activity
+                </h2>
+                <Link
+                  href={`/groups/${memberships[0].group.id}?tab=activity`}
+                  className="text-xs font-medium text-[#1B7DF0] hover:underline"
+                >
+                  View all →
                 </Link>
-              </li>
-            );
-          })}
-        </ul>
+              </div>
+              <ul className="overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white">
+                {recentExpenses.map((expense, idx) => {
+                  const isMyExpense = expense.payer.id === user!.id;
+                  return (
+                    <li
+                      key={expense.id}
+                      className={idx > 0 ? "border-t border-[#E5E7EB]" : undefined}
+                    >
+                      <Link
+                        href={`/groups/${expense.group.id}`}
+                        className="flex items-center gap-3 px-4 py-3.5 transition hover:bg-[#F7F8FA]"
+                      >
+                        <ReceiptText className="h-4 w-4 shrink-0 text-[#6B7280]" />
+                        <p className="min-w-0 flex-1 truncate text-sm text-[#1A1A2E]">
+                          <span className="font-medium">{expense.group.name}</span>
+                          <span className="text-[#6B7280]">
+                            {" "}· {expense.title} · {expense.payer.name} paid ·{" "}
+                            {timeAgo(expense.created_at)}
+                          </span>
+                        </p>
+                        <span
+                          className={`shrink-0 text-sm font-semibold tabular-nums ${
+                            isMyExpense ? "text-[#10B981]" : "text-[#6B7280]"
+                          }`}
+                        >
+                          {formatINR(Number(expense.total_amount))}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+        </>
       )}
     </div>
   );

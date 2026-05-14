@@ -6,6 +6,7 @@ import { X, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { addExpense } from "@/app/actions/expenses";
+import { formatINR } from "@/lib/format";
 
 type Member = { id: string; name: string };
 type SplitType = "EQUAL" | "PERCENTAGE" | "FIXED";
@@ -254,7 +255,7 @@ export function AddExpenseForm({ groupId, members, variant = "button" }: Props) 
                     </label>
                     <div className="relative">
                       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-[#6B7280]">
-                        $
+                        ₹
                       </span>
                       <input
                         id="exp-amount"
@@ -369,7 +370,7 @@ export function AddExpenseForm({ groupId, members, variant = "button" }: Props) 
                         <div key={m.id} className="flex justify-between text-sm">
                           <span className="text-[#6B7280]">{m.name}</span>
                           <span className="font-semibold tabular-nums text-[#1A1A2E]">
-                            ${(parsedTotal / activeMembers.length).toFixed(2)}
+                            {formatINR(parsedTotal / activeMembers.length)}
                           </span>
                         </div>
                       ))}
@@ -418,8 +419,8 @@ export function AddExpenseForm({ groupId, members, variant = "button" }: Props) 
                               </span>
                             </div>
                             {parsedTotal > 0 && (
-                              <span className="w-16 shrink-0 text-right text-xs tabular-nums text-[#6B7280]">
-                                ${((parseFloat(pcts[m.id] || "0") / 100) * parsedTotal).toFixed(2)}
+                              <span className="w-20 shrink-0 text-right text-xs tabular-nums text-[#6B7280]">
+                                {formatINR((parseFloat(pcts[m.id] || "0") / 100) * parsedTotal)}
                               </span>
                             )}
                           </div>
@@ -451,7 +452,7 @@ export function AddExpenseForm({ groupId, members, variant = "button" }: Props) 
                             </span>
                             <div className="relative w-28">
                               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#6B7280]">
-                                $
+                                ₹
                               </span>
                               <input
                                 type="number"

@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle, ReceiptText } from "lucide-react";
+import { formatINR } from "@/lib/format";
 
 export type ActivityEvent =
   | {
@@ -69,7 +70,7 @@ export function ActivityTab({ events }: Props) {
                     </p>
                   </div>
                   <span className="text-sm font-bold tabular-nums text-[#1A1A2E]">
-                    ${event.amount.toFixed(2)}
+                    {formatINR(event.amount)}
                   </span>
                 </div>
               ) : (
@@ -83,7 +84,7 @@ export function ActivityTab({ events }: Props) {
                     </p>
                   </div>
                   <span className="text-sm font-bold tabular-nums text-[#10B981]">
-                    ${event.amount.toFixed(2)}
+                    {formatINR(event.amount)}
                   </span>
                 </div>
               )}

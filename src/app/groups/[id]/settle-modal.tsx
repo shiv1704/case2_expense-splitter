@@ -6,6 +6,7 @@ import { X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { settleUp } from "@/app/actions/settlements";
+import { formatINR } from "@/lib/format";
 
 type Props = {
   groupId: string;
@@ -94,7 +95,7 @@ export function SettleModal({
             <div className="rounded-xl bg-[#F7F8FA] py-5 text-center">
               <p className="text-sm text-[#6B7280]">You pay</p>
               <p className="mt-1 text-3xl font-extrabold tabular-nums text-[#1A1A2E]">
-                ${amount.toFixed(2)}
+                {formatINR(amount)}
               </p>
               <p className="mt-1 text-sm text-[#6B7280]">
                 to{" "}

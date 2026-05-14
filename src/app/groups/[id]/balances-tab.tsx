@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, CheckCircle, Clock } from "lucide-react";
+import { CheckCircle, Clock } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import { SettleModal } from "./settle-modal";
+import { formatINR } from "@/lib/format";
 import type { BalanceEntry, Settlement } from "@/lib/netting";
 
 type HistoryRecord = {
@@ -50,25 +51,25 @@ export function BalancesTab({
 
   return (
     <div className="space-y-8">
-      {/* Net summary */}
+      {/* Net summary cards */}
       {!allZero && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3">
           <div className="rounded-xl border border-[#10B981]/20 bg-[#10B981]/8 px-4 py-3">
             <p className="text-xs text-[#6B7280]">Total owed to group</p>
             <p className="mt-1 text-xl font-bold tabular-nums text-[#10B981]">
-              ${totalOwed.toFixed(2)}
+              {formatINR(totalOwed)}
             </p>
           </div>
           <div className="rounded-xl border border-[#EF4444]/20 bg-[#EF4444]/8 px-4 py-3">
             <p className="text-xs text-[#6B7280]">Total owed by group</p>
             <p className="mt-1 text-xl font-bold tabular-nums text-[#EF4444]">
-              ${totalOwe.toFixed(2)}
+              {formatINR(totalOwe)}
             </p>
           </div>
         </div>
       )}
 
-      {/* Net Balances */}
+      {/* Net Balances — no avatar circles, just names */}
       <section>
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
           Net Balances
@@ -82,17 +83,12 @@ export function BalancesTab({
                 key={b.userId}
                 className="flex items-center justify-between rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 transition hover:shadow-sm"
               >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1B7DF0]/10 text-sm font-bold text-[#1B7DF0]">
-                    {b.name[0].toUpperCase()}
-                  </div>
-                  <span className="text-sm font-medium text-[#1A1A2E]">
-                    {b.name}
-                    {b.userId === currentUserId && (
-                      <span className="ml-1 text-[#6B7280]">(you)</span>
-                    )}
-                  </span>
-                </div>
+                <span className="text-sm font-medium text-[#1A1A2E]">
+                  {b.name}
+                  {b.userId === currentUserId && (
+                    <span className="ml-1 font-normal text-[#6B7280]">(you)</span>
+                  )}
+                </span>
                 <span
                   className={`tabular-nums text-sm font-semibold ${
                     b.netBalance > 0.005
@@ -103,9 +99,9 @@ export function BalancesTab({
                   }`}
                 >
                   {b.netBalance > 0.005
-                    ? `+$${b.netBalance.toFixed(2)}`
+                    ? `+${formatINR(b.netBalance)}`
                     : b.netBalance < -0.005
-                    ? `-$${Math.abs(b.netBalance).toFixed(2)}`
+                    ? `-${formatINR(Math.abs(b.netBalance))}`
                     : "settled ✓"}
                 </span>
               </li>
@@ -114,7 +110,7 @@ export function BalancesTab({
         )}
       </section>
 
-      {/* Suggested Settlements */}
+      {/* Suggested Settlements — full-sentence rows, no avatar bubbles */}
       <section>
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
           Suggested Settlements
@@ -128,57 +124,45 @@ export function BalancesTab({
           </div>
         ) : (
           <ul className="space-y-2">
-            {suggested.map((s, i) => (
-              <li
-                key={i}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 transition hover:shadow-sm"
-              >
-                {/* Avatar → Arrow → Avatar layout */}
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#EF4444]/10 text-sm font-bold text-[#EF4444]">
-                    {s.fromName[0].toUpperCase()}
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <ArrowRight className="h-4 w-4 text-[#6B7280]" />
-                    <span className="text-xs font-bold tabular-nums text-[#1A1A2E]">
-                      ${s.amount.toFixed(2)}
+            {suggested.map((s, i) => {
+              const isMe = s.from === currentUserId;
+              const fromLabel = isMe ? "You" : s.fromName;
+              return (
+                <li
+                  key={i}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E5E7EB] bg-white px-4 py-3.5 transition hover:shadow-sm"
+                >
+                  <p className="text-sm text-[#1A1A2E]">
+                    <span className="font-semibold">{fromLabel}</span>
+                    <span className="text-[#6B7280]"> pay{isMe ? "" : "s"} </span>
+                    <span className="font-semibold">{s.toName}</span>
+                    <span className="ml-1.5 font-bold tabular-nums text-[#1A1A2E]">
+                      {formatINR(s.amount)}
                     </span>
-                  </div>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#10B981]/10 text-sm font-bold text-[#10B981]">
-                    {s.toName[0].toUpperCase()}
-                  </div>
-                  <div className="ml-1">
-                    <p className="text-sm font-medium text-[#1A1A2E]">
-                      {s.fromName}
-                      {s.from === currentUserId && (
-                        <span className="ml-1 text-[#6B7280] font-normal">(you)</span>
-                      )}
-                    </p>
-                    <p className="text-xs text-[#6B7280]">pays {s.toName}</p>
-                  </div>
-                </div>
-                {s.from === currentUserId && (
-                  <button
-                    onClick={() =>
-                      setModal({
-                        toUserId: s.to,
-                        toName: s.toName,
-                        amount: s.amount,
-                        isLast: suggested.length === 1,
-                      })
-                    }
-                    className="rounded-xl bg-[#0D9488] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#0F766E]"
-                  >
-                    Pay via UPI
-                  </button>
-                )}
-              </li>
-            ))}
+                  </p>
+                  {isMe && (
+                    <button
+                      onClick={() =>
+                        setModal({
+                          toUserId: s.to,
+                          toName: s.toName,
+                          amount: s.amount,
+                          isLast: suggested.length === 1,
+                        })
+                      }
+                      className="rounded-xl bg-[#0D9488] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#0F766E]"
+                    >
+                      Settle Up
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
 
-      {/* Settlement History */}
+      {/* Settlement History — names only, no letter avatars */}
       <section>
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
           History
@@ -204,11 +188,11 @@ export function BalancesTab({
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="font-bold tabular-nums text-[#1A1A2E]">
-                    ${h.amount.toFixed(2)}
+                    {formatINR(h.amount)}
                   </span>
                   <span className="flex items-center gap-1 text-xs text-[#6B7280]">
                     <Clock className="h-3 w-3" />
-                    {new Date(h.settledAt).toLocaleDateString("en-US", {
+                    {new Date(h.settledAt).toLocaleDateString("en-IN", {
                       month: "short",
                       day: "numeric",
                       year: "numeric",
@@ -221,7 +205,6 @@ export function BalancesTab({
         )}
       </section>
 
-      {/* UPI Settle modal */}
       <AnimatePresence>
         {modal && (
           <SettleModal
