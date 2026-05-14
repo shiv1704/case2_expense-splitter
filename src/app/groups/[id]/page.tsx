@@ -6,57 +6,27 @@ import { prisma } from "@/lib/prisma";
 import { computeGroupBalances } from "@/lib/balances";
 import { minimizeTransactions } from "@/lib/netting";
 import { formatINR } from "@/lib/format";
+import { checkAndGenerateRecurring } from "@/lib/recurring";
 import { AddExpenseForm } from "./add-expense-form";
 import { BalancesTab } from "./balances-tab";
 import { CopyInviteButton } from "./copy-invite-button";
 import { GroupSettings } from "./group-settings";
 import { ActivityTab, type ActivityEvent } from "./activity-tab";
+import { ExpenseList, type ExpenseRow } from "./expense-list";
 
 type Props = {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ tab?: string }>;
 };
 
-const SPLIT_LABEL: Record<string, string> = {
-  EQUAL: "Equal",
-  PERCENTAGE: "%",
-  FIXED: "Fixed",
-};
-
-function getCategoryEmoji(title: string): string {
-  const t = title.toLowerCase();
-  if (t.includes("rent") || t.includes("house") || t.includes("apartment")) return "🏠";
-  if (t.includes("groceri") || t.includes("market") || t.includes("supermarket")) return "🛒";
-  if (t.includes("electric") || t.includes("power") || t.includes("utility")) return "⚡";
-  if (t.includes("zomato") || t.includes("swiggy") || t.includes("dinner") || t.includes("lunch") || t.includes("breakfast") || t.includes("restaurant") || t.includes("pizza") || t.includes("food")) return "🍕";
-  if (t.includes("internet") || t.includes("wifi") || t.includes("network") || t.includes("broadband")) return "📡";
-  if (t.includes("netflix") || t.includes("movie") || t.includes("hulu") || t.includes("streaming") || t.includes("tv")) return "📺";
-  if (t.includes("ola") || t.includes("uber") || t.includes("taxi") || t.includes("cab") || t.includes("car") || t.includes("gas") || t.includes("petrol")) return "🚗";
-  if (t.includes("flight") || t.includes("hotel") || t.includes("travel") || t.includes("airbnb")) return "✈️";
-  if (t.includes("shop") || t.includes("amazon") || t.includes("mall") || t.includes("washing") || t.includes("soap") || t.includes("powder")) return "🛍️";
-  if (t.includes("medicine") || t.includes("pharmacy") || t.includes("doctor")) return "💊";
-  if (t.includes("coffee") || t.includes("cafe") || t.includes("starbucks")) return "☕";
-  if (t.includes("gas cylinder") || t.includes("cylinder") || t.includes("lpg")) return "🔥";
-  return "🧾";
-}
-
-function groupByMonth<T extends { created_at: Date }>(expenses: T[]) {
-  const map = new Map<string, T[]>();
-  for (const exp of expenses) {
-    const key = new Date(exp.created_at)
-      .toLocaleDateString("en-IN", { month: "long", year: "numeric" })
-      .toUpperCase();
-    if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(exp);
-  }
-  return map;
-}
-
 export default async function GroupPage({ params, searchParams }: Props) {
   const { id } = await params;
   const { tab = "expenses" } = await searchParams;
 
   const user = await getAuthUser();
+
+  // Auto-generate any due recurring expenses before fetching
+  await checkAndGenerateRecurring(id);
 
   const [group, expenses, balances, settlementHistory] = await Promise.all([
     prisma.group.findUnique({
@@ -113,7 +83,34 @@ export default async function GroupPage({ params, searchParams }: Props) {
   }));
 
   const myBalance = balances.find((b) => b.userId === user!.id);
-  const monthGroups = groupByMonth(expenses);
+
+  // Build a lookup so auto-generated copies can show their parent's title
+  const expenseById = new Map(expenses.map((e) => [e.id, e]));
+
+  const expenseRows: ExpenseRow[] = expenses.map((e) => ({
+    id: e.id,
+    title: e.title,
+    total_amount: Number(e.total_amount),
+    split_type: e.split_type,
+    created_at: e.created_at.toISOString(),
+    is_recurring: e.is_recurring,
+    parent_expense_id: e.parent_expense_id,
+    recurrence_rule: e.recurrence_rule,
+    next_due_date: e.next_due_date?.toISOString() ?? null,
+    receipt_url: e.receipt_url,
+    receipt_filename: e.receipt_filename,
+    payer: { id: e.payer.id, name: e.payer.name },
+    splits: e.splits.map((s) => ({
+      id: s.id,
+      user_id: s.user_id,
+      amount: Number(s.amount),
+      percentage: s.percentage !== null ? Number(s.percentage) : null,
+      user: { id: s.user.id, name: s.user.name },
+    })),
+    parentTitle: e.parent_expense_id
+      ? (expenseById.get(e.parent_expense_id)?.title ?? undefined)
+      : undefined,
+  }));
 
   const activityEvents: ActivityEvent[] = [
     ...expenses.map((e) => ({
@@ -210,7 +207,7 @@ export default async function GroupPage({ params, searchParams }: Props) {
 
       {/* Page body */}
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Members — pills without letter avatars */}
+        {/* Members — pills */}
         <section className="mb-8">
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
             Members
@@ -258,91 +255,7 @@ export default async function GroupPage({ params, searchParams }: Props) {
                 </p>
               </div>
             ) : (
-              <div className="space-y-8">
-                {Array.from(monthGroups.entries()).map(([month, monthExpenses]) => (
-                  <div key={month}>
-                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest text-[#6B7280]">
-                      {month}
-                    </h3>
-                    <ul className="space-y-3">
-                      {monthExpenses.map((expense) => {
-                        const emoji = getCategoryEmoji(expense.title);
-                        return (
-                          <li
-                            key={expense.id}
-                            className="rounded-xl border border-[#E5E7EB] bg-white p-4 transition hover:shadow-sm"
-                          >
-                            <div className="flex flex-wrap items-start gap-3">
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F7F8FA] text-xl">
-                                {emoji}
-                              </div>
-
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-start justify-between gap-2">
-                                  <div>
-                                    <span className="font-semibold text-[#1A1A2E]">
-                                      {expense.title}
-                                    </span>
-                                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-[#6B7280]">
-                                      <span>{expense.payer.name} paid</span>
-                                      <span>·</span>
-                                      <span>
-                                        {new Date(expense.created_at).toLocaleDateString(
-                                          "en-IN",
-                                          { month: "short", day: "numeric" }
-                                        )}
-                                      </span>
-                                      <span>·</span>
-                                      <span className="rounded bg-[#F7F8FA] px-1.5 py-0.5 font-medium">
-                                        {SPLIT_LABEL[expense.split_type]}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <span className="text-base font-bold tabular-nums text-[#1A1A2E]">
-                                    {formatINR(Number(expense.total_amount))}
-                                  </span>
-                                </div>
-
-                                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
-                                  {expense.splits.map((split) => (
-                                    <div
-                                      key={split.id}
-                                      className="flex items-center justify-between text-xs"
-                                    >
-                                      <span
-                                        className={`truncate ${
-                                          split.user.id === user!.id
-                                            ? "font-semibold text-[#1B7DF0]"
-                                            : "text-[#6B7280]"
-                                        }`}
-                                      >
-                                        {split.user.name}
-                                        {split.user.id === user!.id && (
-                                          <span className="ml-1 font-normal text-[#6B7280]">
-                                            (you)
-                                          </span>
-                                        )}
-                                      </span>
-                                      <span className="ml-2 shrink-0 tabular-nums text-[#1A1A2E]">
-                                        {formatINR(Number(split.amount))}
-                                        {split.percentage !== null && (
-                                          <span className="ml-1 text-[#6B7280]">
-                                            ({Number(split.percentage).toFixed(0)}%)
-                                          </span>
-                                        )}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                ))}
-              </div>
+              <ExpenseList expenses={expenseRows} currentUserId={user!.id} />
             )}
           </section>
         )}

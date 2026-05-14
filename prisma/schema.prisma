@@ -70,13 +70,38 @@ model Expense {
   split_type   SplitType
   created_at   DateTime  @default(now())
 
+  // Recurring expense fields
+  is_recurring         Boolean   @default(false)
+  recurrence_rule      String?
+  recurrence_day       Int?
+  next_due_date        DateTime?
+  parent_expense_id    String?   @db.Uuid
+  recurrence_anchor_id String?   @db.Uuid
+
+  // Receipt attachment
+  receipt_url      String?
+  receipt_filename String?
+
   group  Group          @relation(fields: [group_id], references: [id], onDelete: Cascade)
   payer  User           @relation("ExpensePayer", fields: [paid_by], references: [id])
   splits ExpenseSplit[]
 
   @@index([group_id])
   @@index([paid_by])
+  @@index([next_due_date])
   @@map("expenses")
+}
+
+model RecurringLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  expense_id   String   @db.Uuid
+  anchor_id    String   @db.Uuid
+  generated_at DateTime @default(now())
+  due_date     DateTime
+  status       String
+
+  @@index([anchor_id])
+  @@map("recurring_logs")
 }
 
 model ExpenseSplit {

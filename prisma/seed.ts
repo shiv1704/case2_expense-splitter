@@ -84,11 +84,13 @@ async function main() {
   // Wipe old expenses so re-runs are idempotent
   await prisma.expense.deleteMany({ where: { group_id: gid } });
 
-  // ── 1. Rent · Alice · EQUAL 3-way ─────────────────────────────────────────
+  // ── 1. Rent · Alice · EQUAL 3-way · MONTHLY recurring ────────────────────
   await prisma.expense.create({
     data: {
       group_id: gid, paid_by: ALICE_ID,
       title: "Rent", total_amount: 27000, split_type: "EQUAL",
+      is_recurring: true, recurrence_rule: "MONTHLY", recurrence_day: 1,
+      next_due_date: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1),
       splits: { create: [
         { user_id: ALICE_ID,   amount: 9000 },
         { user_id: BOB_ID,     amount: 9000 },
@@ -110,11 +112,13 @@ async function main() {
     },
   });
 
-  // ── 3. Electricity bill · Charlie · EQUAL 3-way ───────────────────────────
+  // ── 3. Electricity bill · Charlie · EQUAL 3-way · MONTHLY recurring ───────
   await prisma.expense.create({
     data: {
       group_id: gid, paid_by: CHARLIE_ID,
       title: "Electricity bill", total_amount: 2340, split_type: "EQUAL",
+      is_recurring: true, recurrence_rule: "MONTHLY", recurrence_day: 10,
+      next_due_date: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 10),
       splits: { create: [
         { user_id: ALICE_ID,   amount: 780 },
         { user_id: BOB_ID,     amount: 780 },
@@ -136,11 +140,13 @@ async function main() {
     },
   });
 
-  // ── 5. Internet bill · Bob · EQUAL 3-way ──────────────────────────────────
+  // ── 5. Internet bill · Bob · EQUAL 3-way · MONTHLY recurring ─────────────
   await prisma.expense.create({
     data: {
       group_id: gid, paid_by: BOB_ID,
       title: "Internet bill", total_amount: 999, split_type: "EQUAL",
+      is_recurring: true, recurrence_rule: "MONTHLY", recurrence_day: 5,
+      next_due_date: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 5),
       splits: { create: [
         { user_id: ALICE_ID,   amount: 333 },
         { user_id: BOB_ID,     amount: 333 },
