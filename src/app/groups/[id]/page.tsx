@@ -1,15 +1,14 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import {
-  ShoppingCart, Home, Zap, Utensils, Wifi, Film,
-  Car, Plane, ReceiptText, Users, Copy,
-} from "lucide-react";
+import { Users } from "lucide-react";
 import { getAuthUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { computeGroupBalances } from "@/lib/balances";
 import { minimizeTransactions } from "@/lib/netting";
 import { AddExpenseForm } from "./add-expense-form";
 import { BalancesTab } from "./balances-tab";
+import { CopyInviteButton } from "./copy-invite-button";
+import { ActivityTab, type ActivityEvent } from "./activity-tab";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -22,26 +21,28 @@ const SPLIT_LABEL: Record<string, string> = {
   FIXED: "Fixed",
 };
 
-function getCategoryIcon(title: string) {
+function getCategoryEmoji(title: string): string {
   const t = title.toLowerCase();
-  if (t.includes("rent") || t.includes("house") || t.includes("apartment")) return Home;
-  if (t.includes("groceri") || t.includes("market") || t.includes("supermarket")) return ShoppingCart;
-  if (t.includes("electric") || t.includes("power") || t.includes("utility")) return Zap;
-  if (t.includes("dinner") || t.includes("lunch") || t.includes("breakfast") || t.includes("restaurant") || t.includes("pizza") || t.includes("food")) return Utensils;
-  if (t.includes("internet") || t.includes("wifi") || t.includes("network")) return Wifi;
-  if (t.includes("netflix") || t.includes("movie") || t.includes("hulu") || t.includes("streaming")) return Film;
-  if (t.includes("uber") || t.includes("taxi") || t.includes("car") || t.includes("gas")) return Car;
-  if (t.includes("flight") || t.includes("hotel") || t.includes("travel") || t.includes("airbnb")) return Plane;
-  return ReceiptText;
+  if (t.includes("rent") || t.includes("house") || t.includes("apartment")) return "🏠";
+  if (t.includes("groceri") || t.includes("market") || t.includes("supermarket")) return "🛒";
+  if (t.includes("electric") || t.includes("power") || t.includes("utility")) return "⚡";
+  if (t.includes("dinner") || t.includes("lunch") || t.includes("breakfast") || t.includes("restaurant") || t.includes("pizza") || t.includes("food")) return "🍕";
+  if (t.includes("internet") || t.includes("wifi") || t.includes("network")) return "📡";
+  if (t.includes("netflix") || t.includes("movie") || t.includes("hulu") || t.includes("streaming") || t.includes("tv")) return "📺";
+  if (t.includes("uber") || t.includes("taxi") || t.includes("car") || t.includes("gas") || t.includes("petrol")) return "🚗";
+  if (t.includes("flight") || t.includes("hotel") || t.includes("travel") || t.includes("airbnb")) return "✈️";
+  if (t.includes("shop") || t.includes("amazon") || t.includes("mall")) return "🛍️";
+  if (t.includes("medicine") || t.includes("pharmacy") || t.includes("doctor")) return "💊";
+  if (t.includes("coffee") || t.includes("cafe") || t.includes("starbucks")) return "☕";
+  return "🧾";
 }
 
 function groupByMonth<T extends { created_at: Date }>(expenses: T[]) {
   const map = new Map<string, T[]>();
   for (const exp of expenses) {
-    const key = new Date(exp.created_at).toLocaleDateString("en-US", {
-      month: "long",
-      year: "numeric",
-    });
+    const key = new Date(exp.created_at)
+      .toLocaleDateString("en-US", { month: "long", year: "numeric" })
+      .toUpperCase();
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(exp);
   }
@@ -111,14 +112,35 @@ export default async function GroupPage({ params, searchParams }: Props) {
   const myBalance = balances.find((b) => b.userId === user!.id);
   const monthGroups = groupByMonth(expenses);
 
+  const activityEvents: ActivityEvent[] = [
+    ...expenses.map((e) => ({
+      type: "expense" as const,
+      id: e.id,
+      title: e.title,
+      payerName: e.payer.name,
+      amount: Number(e.total_amount),
+      date: e.created_at.toISOString(),
+    })),
+    ...settlementHistory.map((s) => ({
+      type: "settlement" as const,
+      id: s.id,
+      fromName: s.from.name,
+      toName: s.to.name,
+      amount: Number(s.amount),
+      date: s.settled_at.toISOString(),
+    })),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const tabs = ["expenses", "balances", "activity"] as const;
+
   return (
     <div className="-mx-4 sm:-mx-6 lg:-mx-8">
-      {/* Full-width header */}
-      <div className="bg-gradient-to-br from-[#1B7DF0] to-[#1567CC] px-4 py-8 sm:px-6 lg:px-8">
+      {/* Full-width blue gradient header */}
+      <div className="bg-gradient-to-br from-[#1B7DF0] to-[#0EA5E9] px-4 py-8 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-5xl">
           <Link
             href="/dashboard"
-            className="mb-4 inline-block text-sm text-white/70 hover:text-white"
+            className="mb-4 inline-block text-sm text-white/70 transition hover:text-white"
           >
             ← Dashboard
           </Link>
@@ -133,16 +155,7 @@ export default async function GroupPage({ params, searchParams }: Props) {
                 </span>
               </div>
             </div>
-            {/* Invite code badge */}
-            <div className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2 backdrop-blur-sm">
-              <div>
-                <p className="text-xs font-medium text-white/60">Invite code</p>
-                <p className="font-mono text-xl font-bold tracking-widest text-white">
-                  {group.invite_code}
-                </p>
-              </div>
-              <Copy className="h-4 w-4 text-white/60" />
-            </div>
+            <CopyInviteButton code={group.invite_code} />
           </div>
 
           {/* My balance chip */}
@@ -159,6 +172,27 @@ export default async function GroupPage({ params, searchParams }: Props) {
                 : `You owe $${Math.abs(myBalance.netBalance).toFixed(2)}`}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Sticky tab bar */}
+      <div className="sticky top-14 z-10 border-b border-[#E5E7EB] bg-white px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-5xl">
+          <div className="flex gap-0">
+            {tabs.map((t) => (
+              <Link
+                key={t}
+                href={`?tab=${t}`}
+                className={`px-5 py-3.5 text-sm font-medium transition border-b-2 ${
+                  tab === t
+                    ? "border-[#1B7DF0] text-[#1B7DF0]"
+                    : "border-transparent text-[#6B7280] hover:text-[#1A1A2E]"
+                }`}
+              >
+                {t[0].toUpperCase() + t.slice(1)}
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -189,23 +223,6 @@ export default async function GroupPage({ params, searchParams }: Props) {
           </ul>
         </section>
 
-        {/* Tab bar */}
-        <div className="mb-6 flex gap-1 rounded-xl border border-[#E5E7EB] bg-[#F7F8FA] p-1 w-fit">
-          {(["expenses", "balances"] as const).map((t) => (
-            <Link
-              key={t}
-              href={`?tab=${t}`}
-              className={`rounded-lg px-5 py-1.5 text-sm font-medium transition ${
-                tab === t
-                  ? "bg-white text-[#1A1A2E] shadow-sm"
-                  : "text-[#6B7280] hover:text-[#1A1A2E]"
-              }`}
-            >
-              {t === "expenses" ? "Expenses" : "Balances"}
-            </Link>
-          ))}
-        </div>
-
         {/* Tab content */}
         {tab === "balances" ? (
           <BalancesTab
@@ -215,6 +232,8 @@ export default async function GroupPage({ params, searchParams }: Props) {
             suggested={suggested}
             history={history}
           />
+        ) : tab === "activity" ? (
+          <ActivityTab events={activityEvents} />
         ) : (
           <section>
             {/* Expenses header */}
@@ -227,9 +246,7 @@ export default async function GroupPage({ params, searchParams }: Props) {
 
             {expenses.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-16 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#1B7DF0]/10">
-                  <ReceiptText className="h-7 w-7 text-[#1B7DF0]" />
-                </div>
+                <div className="text-5xl">🧾</div>
                 <p className="text-sm text-[#6B7280]">
                   No expenses yet. Add the first one above.
                 </p>
@@ -238,21 +255,21 @@ export default async function GroupPage({ params, searchParams }: Props) {
               <div className="space-y-8">
                 {Array.from(monthGroups.entries()).map(([month, monthExpenses]) => (
                   <div key={month}>
-                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest text-[#6B7280]">
                       {month}
                     </h3>
                     <ul className="space-y-3">
                       {monthExpenses.map((expense) => {
-                        const Icon = getCategoryIcon(expense.title);
+                        const emoji = getCategoryEmoji(expense.title);
                         return (
                           <li
                             key={expense.id}
                             className="rounded-xl border border-[#E5E7EB] bg-white p-4 transition hover:shadow-sm"
                           >
                             <div className="flex flex-wrap items-start gap-3">
-                              {/* Category icon */}
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1B7DF0]/10">
-                                <Icon className="h-5 w-5 text-[#1B7DF0]" />
+                              {/* Emoji category icon */}
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F7F8FA] text-xl">
+                                {emoji}
                               </div>
 
                               <div className="min-w-0 flex-1">
@@ -325,6 +342,11 @@ export default async function GroupPage({ params, searchParams }: Props) {
           </section>
         )}
       </div>
+
+      {/* FAB — only on expenses tab */}
+      {tab === "expenses" && (
+        <AddExpenseForm groupId={id} members={members} variant="fab" />
+      )}
     </div>
   );
 }

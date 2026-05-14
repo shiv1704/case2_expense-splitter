@@ -2,13 +2,19 @@
 
 @theme inline {
   --color-primary: #1B7DF0;
-  --color-primary-dark: #1567CC;
+  --color-primary-dark: #1565C0;
   --color-credit: #10B981;
   --color-debt: #EF4444;
   --color-ink: #1A1A2E;
   --color-muted: #6B7280;
   --color-border: #E5E7EB;
   --color-surface: #F7F8FA;
+  --color-pocket-blue: #1B7DF0;
+  --color-pocket-blue-dark: #1565C0;
+  --color-pocket-green: #10B981;
+  --color-pocket-red: #EF4444;
+  --color-pocket-purple: #7C3AED;
+  --color-pocket-orange: #F59E0B;
   --font-sans: var(--font-inter);
 }
 

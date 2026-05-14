@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { register } from "@/app/actions/auth";
 
+const FEATURES = [
+  ["💰", "Split expenses equally or by custom amounts"],
+  ["⚖️", "Smart balance netting — minimized transactions"],
+  ["📱", "Settle via UPI — GPay, PhonePe, Paytm"],
+];
+
 type Props = {
   searchParams: Promise<{ error?: string }>;
 };
@@ -9,17 +15,35 @@ export default async function RegisterPage({ searchParams }: Props) {
   const params = await searchParams;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F7F8FA] px-4 py-12">
-      <div className="w-full max-w-[400px]">
-        {/* Logo */}
-        <div className="mb-8 text-center">
-          <h1 className="text-4xl font-extrabold text-[#1B7DF0]">Pocket</h1>
-          <p className="mt-2 text-sm text-[#6B7280]">Split bills. Stay friends.</p>
+    <div className="flex min-h-screen">
+      {/* Left panel */}
+      <div className="hidden lg:flex lg:w-3/5 flex-col items-center justify-center bg-gradient-to-br from-[#0F172A] to-[#1B7DF0] p-12 text-white">
+        <div className="max-w-sm">
+          <h1 className="text-5xl font-extrabold tracking-tight">Pocket</h1>
+          <p className="mt-3 text-xl text-white/70">Split bills. Stay friends.</p>
+          <ul className="mt-10 space-y-5">
+            {FEATURES.map(([emoji, text]) => (
+              <li key={text} className="flex items-center gap-4">
+                <span className="text-2xl">{emoji}</span>
+                <span className="text-base text-white/85">{text}</span>
+              </li>
+            ))}
+          </ul>
         </div>
+      </div>
 
-        {/* Register card */}
-        <div className="rounded-2xl border border-[#E5E7EB] bg-white p-8 shadow-sm">
-          <h2 className="mb-6 text-xl font-bold text-[#1A1A2E]">Create account</h2>
+      {/* Right panel */}
+      <div className="flex flex-1 flex-col items-center justify-center bg-white px-6 py-12">
+        <div className="w-full max-w-sm">
+          {/* Mobile-only logo */}
+          <div className="mb-8 text-center lg:hidden">
+            <h1 className="text-4xl font-extrabold text-[#1B7DF0]">Pocket</h1>
+            <p className="mt-2 text-sm text-[#6B7280]">Split bills. Stay friends.</p>
+          </div>
+
+          <h2 className="mb-6 text-2xl font-bold text-[#1A1A2E]">
+            Create account
+          </h2>
 
           {params.error && (
             <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-[#EF4444]">
