@@ -28,12 +28,12 @@ const prisma = new PrismaClient({ adapter });
 
 // ─── fixed demo UUIDs ────────────────────────────────────────────────────────
 
-const ALICE_ID   = "11111111-1111-4111-8111-111111111111"; // jerry@demo.com
+const ALICE_ID   = "11111111-1111-4111-8111-111111111111"; // alice@demo.com
 const BOB_ID     = "22222222-2222-4222-8222-222222222222"; // bob@demo.com
 const CHARLIE_ID = "33333333-3333-4333-8333-333333333333"; // charlie@demo.com
 
 const DEMO_USERS = [
-  { id: ALICE_ID,   email: "jerry@demo.com",   name: "Alice"   },
+  { id: ALICE_ID,   email: "alice@demo.com",  name: "Alice"   },
   { id: BOB_ID,     email: "bob@demo.com",     name: "Bob"     },
   { id: CHARLIE_ID, email: "charlie@demo.com", name: "Charlie" },
 ] as const;
@@ -49,7 +49,7 @@ async function seedAuthUsers() {
          is_super_admin, is_sso_user, is_anonymous, created_at, updated_at
        ) VALUES (
          $1, 'authenticated', 'authenticated', $2,
-         extensions.crypt($3, extensions.gen_salt('bf')),
+         extensions.crypt($3, extensions.gen_salt('bf', 10)),
          now(),
          '{"provider":"email","providers":["email"]}', '{}',
          false, false, false, now(), now()

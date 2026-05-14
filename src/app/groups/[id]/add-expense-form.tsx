@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { X, Plus } from "lucide-react";
 import { addExpense } from "@/app/actions/expenses";
 
 type Member = { id: string; name: string };
@@ -13,7 +14,6 @@ type Props = {
 };
 
 function initEqualPcts(members: Member[]): Record<string, string> {
-  // Distribute 100% evenly; give the remainder to the first member
   const base = Math.floor(100 / members.length);
   const rem = 100 - base * members.length;
   return Object.fromEntries(
@@ -27,7 +27,6 @@ export function AddExpenseForm({ groupId, members }: Props) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Form fields
   const [splitType, setSplitType] = useState<SplitType>("EQUAL");
   const [totalAmount, setTotalAmount] = useState("");
   const [pcts, setPcts] = useState<Record<string, string>>(() =>
@@ -54,7 +53,6 @@ export function AddExpenseForm({ groupId, members }: Props) {
     setOpen(false);
   }
 
-  // Live totals for the validation display
   const parsedTotal = parseFloat(totalAmount) || 0;
   const pctTotal = members.reduce(
     (s, m) => s + parseFloat(pcts[m.id] || "0"),
@@ -82,7 +80,6 @@ export function AddExpenseForm({ groupId, members }: Props) {
         };
       });
     }
-    // FIXED
     return members.map((m) => ({
       user_id: m.id,
       amount: parseFloat(fixed[m.id] || "0"),
@@ -94,15 +91,12 @@ export function AddExpenseForm({ groupId, members }: Props) {
     e.preventDefault();
     setError(null);
 
-    // Client-side validation (server repeats this; this is just for UX speed)
     if (!parsedTotal || parsedTotal <= 0) {
       setError("Amount must be a positive number");
       return;
     }
     if (splitType === "PERCENTAGE" && !pctValid) {
-      setError(
-        `Percentages must sum to 100 — currently ${pctTotal.toFixed(1)}%`
-      );
+      setError(`Percentages must sum to 100 — currently ${pctTotal.toFixed(1)}%`);
       return;
     }
     if (splitType === "FIXED" && !fixedValid) {
@@ -130,8 +124,9 @@ export function AddExpenseForm({ groupId, members }: Props) {
     <>
       <button
         onClick={handleOpen}
-        className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700"
+        className="flex items-center gap-1.5 rounded-lg bg-[#1B7DF0] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1567CC]"
       >
+        <Plus className="h-4 w-4" />
         Add expense
       </button>
 
@@ -139,35 +134,33 @@ export function AddExpenseForm({ groupId, members }: Props) {
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 z-40 bg-black/30"
+            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
             onClick={handleClose}
           />
 
           {/* Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl flex flex-col max-h-[90vh]">
+            <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl">
               {/* Header */}
-              <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4 shrink-0">
-                <h2 className="text-lg font-semibold text-zinc-900">
-                  Add expense
-                </h2>
+              <div className="flex shrink-0 items-center justify-between border-b border-[#E5E7EB] px-6 py-4">
+                <h2 className="text-lg font-bold text-[#1A1A2E]">Add expense</h2>
                 <button
                   type="button"
                   onClick={handleClose}
                   aria-label="Close"
-                  className="text-2xl leading-none text-zinc-400 hover:text-zinc-600"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-[#6B7280] transition hover:bg-[#F7F8FA] hover:text-[#1A1A2E]"
                 >
-                  &times;
+                  <X className="h-5 w-5" />
                 </button>
               </div>
 
               {/* Scrollable body */}
               <form
                 onSubmit={handleSubmit}
-                className="overflow-y-auto px-6 py-5 space-y-5"
+                className="space-y-5 overflow-y-auto px-6 py-5"
               >
                 {error && (
-                  <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
+                  <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-[#EF4444]">
                     {error}
                   </div>
                 )}
@@ -176,7 +169,7 @@ export function AddExpenseForm({ groupId, members }: Props) {
                 <div>
                   <label
                     htmlFor="exp-title"
-                    className="mb-1.5 block text-sm font-medium text-zinc-700"
+                    className="mb-1.5 block text-sm font-medium text-[#1A1A2E]"
                   >
                     Title
                   </label>
@@ -187,7 +180,7 @@ export function AddExpenseForm({ groupId, members }: Props) {
                     required
                     autoFocus
                     placeholder="e.g. Groceries"
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-200"
+                    className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2.5 text-sm text-[#1A1A2E] placeholder:text-[#6B7280] focus:border-[#1B7DF0] focus:outline-none focus:ring-2 focus:ring-[#1B7DF0]/20"
                   />
                 </div>
 
@@ -195,12 +188,12 @@ export function AddExpenseForm({ groupId, members }: Props) {
                 <div>
                   <label
                     htmlFor="exp-amount"
-                    className="mb-1.5 block text-sm font-medium text-zinc-700"
+                    className="mb-1.5 block text-sm font-medium text-[#1A1A2E]"
                   >
                     Total amount
                   </label>
                   <div className="relative">
-                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-400">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-[#6B7280]">
                       $
                     </span>
                     <input
@@ -213,7 +206,7 @@ export function AddExpenseForm({ groupId, members }: Props) {
                       placeholder="0.00"
                       value={totalAmount}
                       onChange={(e) => setTotalAmount(e.target.value)}
-                      className="w-full rounded-lg border border-zinc-300 py-2 pl-7 pr-3 text-sm focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-200"
+                      className="w-full rounded-lg border border-[#E5E7EB] py-2.5 pl-7 pr-3 text-sm text-[#1A1A2E] placeholder:text-[#6B7280] focus:border-[#1B7DF0] focus:outline-none focus:ring-2 focus:ring-[#1B7DF0]/20"
                     />
                   </div>
                 </div>
@@ -222,7 +215,7 @@ export function AddExpenseForm({ groupId, members }: Props) {
                 <div>
                   <label
                     htmlFor="exp-paid-by"
-                    className="mb-1.5 block text-sm font-medium text-zinc-700"
+                    className="mb-1.5 block text-sm font-medium text-[#1A1A2E]"
                   >
                     Paid by
                   </label>
@@ -230,7 +223,7 @@ export function AddExpenseForm({ groupId, members }: Props) {
                     id="exp-paid-by"
                     name="paid_by"
                     required
-                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-200"
+                    className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2.5 text-sm text-[#1A1A2E] focus:border-[#1B7DF0] focus:outline-none focus:ring-2 focus:ring-[#1B7DF0]/20"
                   >
                     {members.map((m) => (
                       <option key={m.id} value={m.id}>
@@ -242,19 +235,19 @@ export function AddExpenseForm({ groupId, members }: Props) {
 
                 {/* Split type toggle */}
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-700">
+                  <label className="mb-1.5 block text-sm font-medium text-[#1A1A2E]">
                     Split type
                   </label>
-                  <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-zinc-300 text-sm">
+                  <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-[#E5E7EB] text-sm">
                     {(["EQUAL", "PERCENTAGE", "FIXED"] as const).map((t) => (
                       <button
                         key={t}
                         type="button"
                         onClick={() => setSplitType(t)}
-                        className={`py-2 text-center font-medium transition-colors ${
+                        className={`py-2 text-center font-medium transition ${
                           splitType === t
-                            ? "bg-zinc-900 text-white"
-                            : "text-zinc-600 hover:bg-zinc-50"
+                            ? "bg-[#1B7DF0] text-white"
+                            : "text-[#6B7280] hover:bg-[#F7F8FA]"
                         }`}
                       >
                         {t[0] + t.slice(1).toLowerCase()}
@@ -266,11 +259,11 @@ export function AddExpenseForm({ groupId, members }: Props) {
 
                 {/* EQUAL preview */}
                 {splitType === "EQUAL" && parsedTotal > 0 && (
-                  <div className="rounded-lg bg-zinc-50 px-4 py-3 space-y-1.5">
+                  <div className="rounded-lg border border-[#E5E7EB] bg-[#F7F8FA] px-4 py-3 space-y-1.5">
                     {members.map((m) => (
                       <div key={m.id} className="flex justify-between text-sm">
-                        <span className="text-zinc-600">{m.name}</span>
-                        <span className="font-medium tabular-nums text-zinc-800">
+                        <span className="text-[#6B7280]">{m.name}</span>
+                        <span className="font-semibold tabular-nums text-[#1A1A2E]">
                           ${(parsedTotal / members.length).toFixed(2)}
                         </span>
                       </div>
@@ -282,12 +275,12 @@ export function AddExpenseForm({ groupId, members }: Props) {
                 {splitType === "PERCENTAGE" && (
                   <div>
                     <div className="mb-2 flex items-center justify-between">
-                      <span className="text-sm font-medium text-zinc-700">
+                      <span className="text-sm font-medium text-[#1A1A2E]">
                         Percentages
                       </span>
                       <span
                         className={`text-xs font-semibold tabular-nums ${
-                          pctValid ? "text-green-600" : "text-amber-500"
+                          pctValid ? "text-[#10B981]" : "text-amber-500"
                         }`}
                       >
                         {pctTotal.toFixed(1)}% / 100%
@@ -296,7 +289,7 @@ export function AddExpenseForm({ groupId, members }: Props) {
                     <div className="space-y-2">
                       {members.map((m) => (
                         <div key={m.id} className="flex items-center gap-3">
-                          <span className="min-w-0 flex-1 truncate text-sm text-zinc-700">
+                          <span className="min-w-0 flex-1 truncate text-sm text-[#1A1A2E]">
                             {m.name}
                           </span>
                           <div className="relative w-28">
@@ -307,28 +300,21 @@ export function AddExpenseForm({ groupId, members }: Props) {
                               max="100"
                               value={pcts[m.id]}
                               onChange={(e) =>
-                                setPcts((p) => ({
-                                  ...p,
-                                  [m.id]: e.target.value,
-                                }))
+                                setPcts((p) => ({ ...p, [m.id]: e.target.value }))
                               }
-                              className={`w-full rounded-lg border py-1.5 pl-3 pr-7 text-right text-sm focus:outline-none focus:ring-2 focus:ring-zinc-200 ${
+                              className={`w-full rounded-lg border py-1.5 pl-3 pr-7 text-right text-sm focus:outline-none focus:ring-2 ${
                                 pctValid
-                                  ? "border-zinc-300 focus:border-zinc-500"
-                                  : "border-amber-300 focus:border-amber-400"
+                                  ? "border-[#E5E7EB] focus:border-[#1B7DF0] focus:ring-[#1B7DF0]/20"
+                                  : "border-amber-300 focus:border-amber-400 focus:ring-amber-100"
                               }`}
                             />
-                            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">
+                            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#6B7280]">
                               %
                             </span>
                           </div>
                           {parsedTotal > 0 && (
-                            <span className="w-16 shrink-0 text-right text-xs tabular-nums text-zinc-400">
-                              $
-                              {(
-                                (parseFloat(pcts[m.id] || "0") / 100) *
-                                parsedTotal
-                              ).toFixed(2)}
+                            <span className="w-16 shrink-0 text-right text-xs tabular-nums text-[#6B7280]">
+                              ${((parseFloat(pcts[m.id] || "0") / 100) * parsedTotal).toFixed(2)}
                             </span>
                           )}
                         </div>
@@ -341,12 +327,12 @@ export function AddExpenseForm({ groupId, members }: Props) {
                 {splitType === "FIXED" && (
                   <div>
                     <div className="mb-2 flex items-center justify-between">
-                      <span className="text-sm font-medium text-zinc-700">
+                      <span className="text-sm font-medium text-[#1A1A2E]">
                         Amounts
                       </span>
                       <span
                         className={`text-xs font-semibold tabular-nums ${
-                          fixedValid ? "text-green-600" : "text-amber-500"
+                          fixedValid ? "text-[#10B981]" : "text-amber-500"
                         }`}
                       >
                         ${fixedTotal.toFixed(2)} / ${parsedTotal.toFixed(2)}
@@ -355,11 +341,11 @@ export function AddExpenseForm({ groupId, members }: Props) {
                     <div className="space-y-2">
                       {members.map((m) => (
                         <div key={m.id} className="flex items-center gap-3">
-                          <span className="min-w-0 flex-1 truncate text-sm text-zinc-700">
+                          <span className="min-w-0 flex-1 truncate text-sm text-[#1A1A2E]">
                             {m.name}
                           </span>
                           <div className="relative w-28">
-                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">
+                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#6B7280]">
                               $
                             </span>
                             <input
@@ -368,15 +354,12 @@ export function AddExpenseForm({ groupId, members }: Props) {
                               min="0"
                               value={fixed[m.id]}
                               onChange={(e) =>
-                                setFixed((a) => ({
-                                  ...a,
-                                  [m.id]: e.target.value,
-                                }))
+                                setFixed((a) => ({ ...a, [m.id]: e.target.value }))
                               }
-                              className={`w-full rounded-lg border py-1.5 pl-6 pr-3 text-right text-sm focus:outline-none focus:ring-2 focus:ring-zinc-200 ${
+                              className={`w-full rounded-lg border py-1.5 pl-6 pr-3 text-right text-sm focus:outline-none focus:ring-2 ${
                                 fixedValid
-                                  ? "border-zinc-300 focus:border-zinc-500"
-                                  : "border-amber-300 focus:border-amber-400"
+                                  ? "border-[#E5E7EB] focus:border-[#1B7DF0] focus:ring-[#1B7DF0]/20"
+                                  : "border-amber-300 focus:border-amber-400 focus:ring-amber-100"
                               }`}
                             />
                           </div>
@@ -389,7 +372,7 @@ export function AddExpenseForm({ groupId, members }: Props) {
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="w-full rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-50"
+                  className="w-full rounded-lg bg-[#1B7DF0] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1567CC] disabled:opacity-50"
                 >
                   {isPending ? "Saving…" : "Save expense"}
                 </button>

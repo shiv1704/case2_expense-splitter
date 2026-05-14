@@ -1,24 +1,32 @@
-import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
+import { getAuthUser } from "@/lib/session";
 import { signOut } from "@/app/actions/auth";
 
 export async function Navbar() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   return (
-    <header className="border-b border-zinc-200 bg-white">
+    <header className="sticky top-0 z-30 border-b border-[#E5E7EB] bg-white shadow-sm">
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-        <span className="text-base font-semibold text-zinc-900">Pocket</span>
+        <Link
+          href="/dashboard"
+          className="text-xl font-extrabold tracking-tight text-[#1B7DF0]"
+        >
+          Pocket
+        </Link>
 
         {user && (
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-zinc-500">{user.email}</span>
+          <div className="flex items-center gap-3">
+            <span className="hidden text-sm text-[#6B7280] sm:block">
+              {user.name}
+            </span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1B7DF0]/10 text-sm font-bold text-[#1B7DF0]">
+              {user.name[0].toUpperCase()}
+            </div>
             <form action={signOut}>
               <button
                 type="submit"
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2"
+                className="rounded-lg border border-[#E5E7EB] px-3 py-1.5 text-sm font-medium text-[#6B7280] transition hover:bg-[#F7F8FA] hover:text-[#1A1A2E]"
               >
                 Sign out
               </button>
