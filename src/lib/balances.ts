@@ -22,7 +22,10 @@ export async function computeGroupBalances(
     }),
     prisma.expense.findMany({
       where: { group_id: groupId },
-      include: {
+      select: {
+        paid_by: true,
+        total_amount: true,
+        fx_rate_at_creation: true,
         splits: { select: { user_id: true, amount: true } },
       },
     }),
@@ -38,12 +41,15 @@ export async function computeGroupBalances(
   }
 
   for (const expense of expenses) {
+    // Convert to group base currency before summing — rate is 1.0 for same-currency expenses
+    const rate = Number(expense.fx_rate_at_creation);
+
     const payer = balanceMap.get(expense.paid_by);
-    if (payer) payer.balance += Number(expense.total_amount);
+    if (payer) payer.balance += Number(expense.total_amount) * rate;
 
     for (const split of expense.splits) {
       const member = balanceMap.get(split.user_id);
-      if (member) member.balance -= Number(split.amount);
+      if (member) member.balance -= Number(split.amount) * rate;
     }
   }
 

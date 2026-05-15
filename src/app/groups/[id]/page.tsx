@@ -100,6 +100,8 @@ export default async function GroupPage({ params, searchParams }: Props) {
     next_due_date: e.next_due_date?.toISOString() ?? null,
     receipt_url: e.receipt_url,
     receipt_filename: e.receipt_filename,
+    currency: e.currency,
+    fx_rate_at_creation: Number(e.fx_rate_at_creation),
     payer: { id: e.payer.id, name: e.payer.name },
     splits: e.splits.map((s) => ({
       id: s.id,

@@ -2,16 +2,29 @@
 
 import { useState, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { X, Plus, RefreshCw, Paperclip, Camera, FolderOpen } from "lucide-react";
+import { X, Plus, RefreshCw, Paperclip, Camera, FolderOpen, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { addExpense, updateExpenseReceipt } from "@/app/actions/expenses";
 import { uploadReceipt } from "@/lib/receipt-upload";
-import { formatINR } from "@/lib/format";
+import { formatINR, formatAmount } from "@/lib/format";
 
 type Member = { id: string; name: string };
 type SplitType = "EQUAL" | "PERCENTAGE" | "FIXED";
 type RecurrenceRule = "MONTHLY" | "WEEKLY" | "BIWEEKLY" | "YEARLY";
+
+const CURRENCIES = [
+  { code: "INR", flag: "🇮🇳" },
+  { code: "USD", flag: "🇺🇸" },
+  { code: "AED", flag: "🇦🇪" },
+  { code: "EUR", flag: "🇪🇺" },
+  { code: "GBP", flag: "🇬🇧" },
+  { code: "SGD", flag: "🇸🇬" },
+  { code: "THB", flag: "🇹🇭" },
+  { code: "JPY", flag: "🇯🇵" },
+  { code: "CAD", flag: "🇨🇦" },
+  { code: "AUD", flag: "🇦🇺" },
+] as const;
 
 type Props = {
   groupId: string;
@@ -107,6 +120,12 @@ export function AddExpenseForm({ groupId, members, variant = "button" }: Props) 
   const [suggestion, setSuggestion] = useState<SmartSuggestion>(null);
   const [suggestionDismissed, setSuggestionDismissed] = useState(false);
 
+  // Currency fields
+  const [currency, setCurrency] = useState("INR");
+  const [fxPreview, setFxPreview] = useState<{ rate: number } | null>(null);
+  const [fxFetching, setFxFetching] = useState(false);
+  const fxDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Receipt fields
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string | null>(null);
@@ -141,6 +160,8 @@ export function AddExpenseForm({ groupId, members, variant = "button" }: Props) 
     setSelectedIds(new Set(members.map((m) => m.id)));
     setPcts(initEqualPcts(members));
     setFixed(Object.fromEntries(members.map((m) => [m.id, ""])));
+    setCurrency("INR");
+    setFxPreview(null);
     setIsRecurring(false);
     setRecurrenceRule("MONTHLY");
     setRecurrenceDay(1);
@@ -203,6 +224,32 @@ export function AddExpenseForm({ groupId, members, variant = "button" }: Props) 
       setReceiptPreviewUrl(null);
     }
   }
+
+  // Fetch FX preview whenever currency or amount changes (client-only, for display)
+  useEffect(() => {
+    if (fxDebounceRef.current) clearTimeout(fxDebounceRef.current);
+    const amount = parseFloat(totalAmount) || 0;
+    if (currency === "INR" || !amount) {
+      setFxPreview(null);
+      return;
+    }
+    fxDebounceRef.current = setTimeout(async () => {
+      setFxFetching(true);
+      try {
+        const res = await fetch(`/api/fx?from=${currency}&to=INR`);
+        if (res.ok) {
+          const data = (await res.json()) as { rate: number };
+          setFxPreview({ rate: data.rate });
+        } else {
+          setFxPreview(null);
+        }
+      } catch {
+        setFxPreview(null);
+      } finally {
+        setFxFetching(false);
+      }
+    }, 400);
+  }, [currency, totalAmount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cleanup object URLs on unmount
   useEffect(() => {
@@ -412,28 +459,61 @@ export function AddExpenseForm({ groupId, members, variant = "button" }: Props) 
                     )}
                   </AnimatePresence>
 
-                  {/* Amount */}
+                  {/* Amount + Currency */}
                   <div>
                     <label htmlFor="exp-amount" className="mb-1.5 block text-sm font-medium text-[#1A1A2E]">
                       Total amount
                     </label>
-                    <div className="relative">
-                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-[#6B7280]">
-                        ₹
-                      </span>
-                      <input
-                        id="exp-amount"
-                        name="total_amount"
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        required
-                        placeholder="0.00"
-                        value={totalAmount}
-                        onChange={(e) => setTotalAmount(e.target.value)}
-                        className="w-full rounded-lg border border-[#E5E7EB] py-2.5 pl-7 pr-3 text-sm text-[#1A1A2E] placeholder:text-[#6B7280] focus:border-[#1B7DF0] focus:outline-none focus:ring-2 focus:ring-[#1B7DF0]/20"
-                      />
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-[#6B7280]">
+                          {currency === "INR" ? "₹" : currency}
+                        </span>
+                        <input
+                          id="exp-amount"
+                          name="total_amount"
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          required
+                          placeholder="0.00"
+                          value={totalAmount}
+                          onChange={(e) => setTotalAmount(e.target.value)}
+                          className="w-full rounded-lg border border-[#E5E7EB] py-2.5 pl-10 pr-3 text-sm text-[#1A1A2E] placeholder:text-[#6B7280] focus:border-[#1B7DF0] focus:outline-none focus:ring-2 focus:ring-[#1B7DF0]/20"
+                        />
+                      </div>
+                      {/* Currency selector */}
+                      <select
+                        value={currency}
+                        onChange={(e) => { setCurrency(e.target.value); setFxPreview(null); }}
+                        className="w-28 rounded-lg border border-[#E5E7EB] bg-white px-2 py-2.5 text-sm text-[#1A1A2E] focus:border-[#1B7DF0] focus:outline-none focus:ring-2 focus:ring-[#1B7DF0]/20"
+                      >
+                        {CURRENCIES.map(({ code, flag }) => (
+                          <option key={code} value={code}>{flag} {code}</option>
+                        ))}
+                      </select>
                     </div>
+                    <input type="hidden" name="currency" value={currency} />
+
+                    {/* Live FX preview (display only — actual rate fetched server-side) */}
+                    {currency !== "INR" && parsedTotal > 0 && (
+                      <p className="mt-1.5 text-xs text-[#6B7280]">
+                        {fxFetching ? (
+                          <span className="flex items-center gap-1">
+                            <Loader2 className="h-3 w-3 animate-spin" /> Fetching rate…
+                          </span>
+                        ) : fxPreview ? (
+                          <>
+                            ≈ {formatINR(parsedTotal * fxPreview.rate)} in group currency
+                            <span className="ml-1 text-[#9CA3AF]">
+                              (1 {currency} = ₹{fxPreview.rate.toFixed(2)})
+                            </span>
+                          </>
+                        ) : (
+                          "Rate unavailable — will be fetched at submission"
+                        )}
+                      </p>
+                    )}
                   </div>
 
                   {/* Paid by */}
@@ -527,7 +607,7 @@ export function AddExpenseForm({ groupId, members, variant = "button" }: Props) 
                         <div key={m.id} className="flex justify-between text-sm">
                           <span className="text-[#6B7280]">{m.name}</span>
                           <span className="font-semibold tabular-nums text-[#1A1A2E]">
-                            {formatINR(parsedTotal / activeMembers.length)}
+                            {formatAmount(parsedTotal / activeMembers.length, currency)}
                           </span>
                         </div>
                       ))}
@@ -580,7 +660,7 @@ export function AddExpenseForm({ groupId, members, variant = "button" }: Props) 
                       <div className="mb-2 flex items-center justify-between">
                         <span className="text-sm font-medium text-[#1A1A2E]">Amounts</span>
                         <span className={`text-xs font-semibold tabular-nums ${fixedValid ? "text-[#10B981]" : "text-amber-500"}`}>
-                          {formatINR(fixedTotal)} / {formatINR(parsedTotal)}
+                          {formatAmount(fixedTotal, currency)} / {formatAmount(parsedTotal, currency)}
                         </span>
                       </div>
                       <div className="space-y-2">
@@ -588,7 +668,7 @@ export function AddExpenseForm({ groupId, members, variant = "button" }: Props) 
                           <div key={m.id} className="flex items-center gap-3">
                             <span className="min-w-0 flex-1 truncate text-sm text-[#1A1A2E]">{m.name}</span>
                             <div className="relative w-28">
-                              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#6B7280]">₹</span>
+                              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#6B7280]">{currency === "INR" ? "₹" : currency}</span>
                               <input
                                 type="number"
                                 step="0.01"

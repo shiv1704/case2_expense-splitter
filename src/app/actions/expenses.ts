@@ -3,6 +3,7 @@
 import { getAuthUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { SplitType } from "@/generated/prisma/enums";
+import { fetchFXRate } from "@/lib/fx";
 
 type SplitInput = {
   user_id: string;
@@ -23,6 +24,11 @@ export async function addExpense(
   const paid_by = formData.get("paid_by") as string | null;
   const splitTypeRaw = formData.get("split_type") as string | null;
   const splitsJson = formData.get("splits_json") as string | null;
+
+  // --- Currency ---
+  const currency = ((formData.get("currency") as string | null) || "INR")
+    .toUpperCase()
+    .trim();
 
   // --- Recurring fields ---
   const isRecurring = formData.get("is_recurring") === "true";
@@ -69,6 +75,24 @@ export async function addExpense(
     }
   }
 
+  // --- FX rate (server-authoritative, never trusted from client) ---
+  const group = await prisma.group.findUnique({
+    where: { id: groupId },
+    select: { base_currency: true },
+  });
+  const baseCurrency = group?.base_currency ?? "INR";
+
+  let fxRate = 1.0;
+  if (currency !== baseCurrency) {
+    try {
+      fxRate = await fetchFXRate(currency, baseCurrency);
+    } catch {
+      return {
+        error: `Could not fetch exchange rate for ${currency}. Please try again or enter amount in ${baseCurrency}.`,
+      };
+    }
+  }
+
   // --- Membership guard ---
   const memberRows = await prisma.groupMember.findMany({
     where: { group_id: groupId },
@@ -109,6 +133,8 @@ export async function addExpense(
         title,
         total_amount: totalAmount,
         split_type: splitType,
+        currency,
+        fx_rate_at_creation: fxRate,
         is_recurring: isRecurring,
         recurrence_rule: isRecurring ? recurrenceRule : null,
         recurrence_day: isRecurring ? recurrenceDay : null,

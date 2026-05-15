@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Paperclip } from "lucide-react";
 import { ReceiptLightbox } from "./receipt-lightbox";
-import { formatINR } from "@/lib/format";
+import { formatINR, formatAmount } from "@/lib/format";
 
 const SPLIT_LABEL: Record<string, string> = {
   EQUAL: "Equal",
@@ -23,6 +23,8 @@ export type ExpenseRow = {
   next_due_date: string | null;
   receipt_url: string | null;
   receipt_filename: string | null;
+  currency: string;
+  fx_rate_at_creation: number;
   payer: { id: string; name: string };
   splits: {
     id: string;
@@ -177,9 +179,18 @@ export function ExpenseList({ expenses, currentUserId }: Props) {
                               </span>
                             </div>
                           </div>
-                          <span className="text-base font-bold tabular-nums text-[#1A1A2E]">
-                            {formatINR(expense.total_amount)}
-                          </span>
+                          <div className="text-right">
+                            <span className="text-base font-bold tabular-nums text-[#1A1A2E]">
+                              {expense.currency !== "INR"
+                                ? formatAmount(expense.total_amount, expense.currency)
+                                : formatINR(expense.total_amount)}
+                            </span>
+                            {expense.currency !== "INR" && (
+                              <p className="text-[11px] text-[#6B7280]">
+                                ≈ {formatINR(expense.total_amount * expense.fx_rate_at_creation)}
+                              </p>
+                            )}
+                          </div>
                         </div>
 
                         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
@@ -201,7 +212,9 @@ export function ExpenseList({ expenses, currentUserId }: Props) {
                                 )}
                               </span>
                               <span className="ml-2 shrink-0 tabular-nums text-[#1A1A2E]">
-                                {formatINR(split.amount)}
+                                {expense.currency !== "INR"
+                                  ? formatAmount(split.amount, expense.currency)
+                                  : formatINR(split.amount)}
                                 {split.percentage !== null && (
                                   <span className="ml-1 text-[#6B7280]">
                                     ({Number(split.percentage).toFixed(0)}%)

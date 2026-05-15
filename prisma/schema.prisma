@@ -31,11 +31,12 @@ model User {
 }
 
 model Group {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String
-  invite_code String   @unique
-  created_by  String   @db.Uuid
-  created_at  DateTime @default(now())
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String
+  invite_code   String   @unique
+  created_by    String   @db.Uuid
+  created_at    DateTime @default(now())
+  base_currency String   @default("INR")
 
   creator     User          @relation("GroupCreator", fields: [created_by], references: [id])
   members     GroupMember[]
@@ -81,6 +82,10 @@ model Expense {
   // Receipt attachment
   receipt_url      String?
   receipt_filename String?
+
+  // Multi-currency
+  currency            String  @default("INR")
+  fx_rate_at_creation Decimal @default(1) @db.Decimal(18, 8)
 
   group  Group          @relation(fields: [group_id], references: [id], onDelete: Cascade)
   payer  User           @relation("ExpensePayer", fields: [paid_by], references: [id])
