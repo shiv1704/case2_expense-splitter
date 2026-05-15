@@ -1,88 +1,100 @@
-# Pocket — Roommate Expense Splitter
+# Case 2: Pocket — Roommate Expense Splitter
 
-A web app where users create groups, add expenses with unequal splits, see minimized settlement balances, and settle up with a full audit trail. All data persists in Postgres (Supabase).
+**Live demo:** https://case2-expense-splitter.vercel.app
+**Repo:** https://github.com/shiv1704/case2_expense-splitter
+**Demo video:** *(to be added)*
 
-## Stack
+---
 
-- **Next.js 16** App Router + TypeScript
-- **Tailwind CSS**
-- **Supabase** — Postgres + Auth (magic link)
-- **Prisma 7** ORM with `@prisma/adapter-pg`
-- **Vercel** deployment
+## What this is
 
-## Features
+Pocket is a roommate expense-splitting web app. Users create groups, add expenses with equal or unequal splits, and see a minimized settlement plan — the fewest possible payments to bring everyone to zero. Every settle-up creates an auditable record. All data persists in Postgres (Supabase); a hard refresh never loses state.
 
-- Magic-link authentication (no passwords for end users)
-- Create groups with shareable invite codes
-- Add expenses with three split modes: Equal, Percentage, Fixed
-- Greedy min-transaction netting algorithm — minimizes the number of payments needed to settle a group
-- Settle Up button (visible only to the debtor) creates an auditable Settlement record
-- Balance tab shows net positions, suggested settlements, and full payment history
+Key features shipped:
 
-## Demo group
+- Email + password auth with a demo bypass (no sign-up required to evaluate)
+- Groups with shareable invite codes
+- Three split modes: Equal, Percentage, Fixed
+- Greedy min-transaction netting algorithm — minimizes payments needed to settle
+- Recurring expenses with lazy auto-generation on page load (Anchor + Drift pattern)
+- Receipt photo upload via Supabase Storage (Camera or file picker, 5 MB limit)
+- Settle Up flow with UPI deep links (GPay / PhonePe / Paytm) and manual confirmation
+- Full audit trail: Activity tab, settlement history
+- Group settings: rename, leave, delete, manage recurring schedule
 
-| Email | Name | Password |
-|---|---|---|
-| jerry@demo.com | Alice | demo1234 |
-| bob@demo.com | Bob | demo1234 |
-| charlie@demo.com | Charlie | demo1234 |
+---
 
-Group: **Emirates 4B** · invite code `DEMO42`
-
-## Getting started
+## How to run locally
 
 ```bash
+git clone https://github.com/shiv1704/case2_expense-splitter
+cd case2_expense-splitter
 npm install
+```
+
+Create `.env.local` with your Supabase project credentials:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+DATABASE_URL=postgresql://postgres.<project>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres?pgbouncer=true
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+```
+
+```bash
+npx prisma generate
 npm run dev
 ```
 
-## Running tests
+Open http://localhost:3000 and log in with the demo credentials below.
+
+### Demo accounts (pre-seeded)
+
+| Email | Password | Name |
+|---|---|---|
+| alice@demo.com | demo1234 | Alice |
+| bob@demo.com | demo1234 | Bob |
+| charlie@demo.com | demo1234 | Charlie |
+
+Group: **Flat 4B** · invite code `DEMO42`
+
+### Run tests
 
 ```bash
 npm test
 ```
 
-The unit test suite covers the netting algorithm across two-person, three-person, multi-creditor/debtor, and floating-point edge cases.
-
-## Seeding
-
-The demo data is pre-seeded. To re-seed a fresh database:
-
-```bash
-npx prisma db seed
-```
-
-> Requires a direct Postgres connection on port 5432. If your network blocks it (common on Supabase free tier), apply `prisma/seed.ts` via the Supabase Dashboard SQL editor instead.
+Covers the netting algorithm: two-person, three-person, multi-creditor/debtor, and floating-point edge cases.
 
 ---
 
-## Future: International Currency Handling
+## Stack
 
-To support multi-currency groups, each expense would store a `currency` field and an `fx_rate_at_creation` (fetched from an ECB / fixer.io snapshot at the moment the expense is submitted). Balances settle in the group's **base currency**. Historic rates must be locked at expense creation time — never recomputed — to prevent balance drift as exchange rates move.
+| Technology | Why |
+|---|---|
+| **Next.js 14** App Router + TypeScript | Server components eliminate a whole API layer — data fetching, auth checks, and balance computation run server-side with zero client waterfalls |
+| **Supabase** (Postgres + Auth + Storage) | Managed Postgres with row-level security out of the box, plus Storage for receipt uploads and Auth for email/password without running a separate service |
+| **Prisma ORM** | Type-safe queries with `@prisma/adapter-pg` for PgBouncer compatibility; schema-as-code keeps migrations reviewable in git |
+| **Tailwind CSS** | Utility-first means no context-switching between files for layout tweaks; the constraint of a fixed palette keeps the design consistent |
+| **Vercel** | Zero-config deploys from `git push`; Edge network puts the Next.js runtime close to users without any infrastructure work |
 
-### Schema additions
+---
 
-```prisma
-model Group {
-  base_currency String @default("USD") // ISO 4217
-}
+## What's NOT done
 
-model Expense {
-  currency           String  @default("USD")
-  fx_rate_at_creation Decimal @db.Decimal(18, 8)
-  // rate = 1 unit of expense.currency expressed in group.base_currency
-  // e.g. expense in JPY, group base USD → fx_rate ≈ 0.00670
-}
-```
+- **Email notifications** — no SMTP / transactional email wired up; members learn about new expenses only by visiting the app
+- **Mobile app** — responsive web only; no React Native / Expo shell
+- **CSV / PDF export** — expenses are visible in-app but cannot be downloaded
+- **Multi-currency** — all amounts are in INR; no FX rate lookup or per-expense currency field
+- **Push notifications** — no service worker or FCM integration
+- **Recurring expense cron** — auto-generation runs lazily on page load, not on a server-side schedule; if no one visits the group, overdue expenses are not generated until the next visit
 
-### Netting impact
+---
 
-`computeGroupBalances` must multiply each split amount by `fx_rate_at_creation` before summing, so every contribution is expressed in the base currency before the greedy algorithm runs. Split amounts stored on `ExpenseSplit` remain in the original currency for display; only the balance aggregation converts them.
+## In production I would also add
 
-### Rate fetching
-
-The FX rate is fetched server-side inside the `addExpense` server action — never client-side — to prevent manipulation. ECB provides free daily rates with EUR as the base; Open Exchange Rates / fixer.io cover arbitrary base currencies on paid tiers.
-
-### Why lock at creation
-
-Recomputing historic rates when exchange rates move would cause a group's total balance to drift over time without any new expenses being added — members could end up owing different amounts week to week for the same trip. Locking the rate makes the ledger append-only and auditable, matching how accounting systems handle multi-currency transactions.
+- **Email notifications on new expense** — fire a transactional email (Resend / SendGrid) to every group member when an expense is added or a settlement is recorded, so people stay informed without opening the app
+- **Recurring expense automation** — replace the lazy page-load trigger with a proper cron job (Vercel Cron or a Supabase Edge Function on a schedule) so auto-generated expenses appear on time even if no one visits
+- **Receipt photo upload improvements** — OCR the receipt (Google Cloud Vision / AWS Textract) to pre-fill the expense title and amount, reducing manual entry
+- **Export CSV / PDF** — let members download a full statement for a group, useful at the end of a lease or a trip
+- **Mobile app** — wrap the same backend in a React Native / Expo app with push notifications for new expenses and settlement reminders
