@@ -20,10 +20,8 @@
 
 ## De-scoped
 
-The following features were explicitly cut to keep the prototype shippable within the time constraint. Each is architecturally additive (no schema changes break existing data) and documented in the codebase so a future engineer can pick them up:
+The following features were cut to keep the prototype shippable within the time constraint. Each is architecturally additive and documented so a future engineer can pick them up:
 
-- **Recurring expenses** — storing a recurrence rule and auto-generating expenses on a cron schedule. The data model (anchor expense + `next_due_date`) is designed and documented in `CLAUDE.md`; wiring a Vercel Cron job is the remaining step.
-- **Receipt photo upload** — attaching an image or PDF to an expense via Supabase Storage. The upload path (`receipts/{groupId}/{expenseId}/`) and bucket policy are specified; the UI affordance (camera / file picker) was not built.
 - **CSV / PDF export** — downloading a full statement for a group. A server route that streams a CSV from the `expenses` + `expense_splits` join is straightforward but was deprioritised against core splitting logic.
 - **Push notifications** — alerting group members when a new expense is added. Requires a service worker, a push subscription store, and a transactional email or FCM integration — independently deployable but not core to validating the split and settle flow.
 
