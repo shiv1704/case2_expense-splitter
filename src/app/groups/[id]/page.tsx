@@ -13,6 +13,7 @@ import { CopyInviteButton } from "./copy-invite-button";
 import { GroupSettings } from "./group-settings";
 import { ActivityTab, type ActivityEvent } from "./activity-tab";
 import { ExpenseList, type ExpenseRow } from "./expense-list";
+import { AddMemberButton } from "./add-member-button";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -156,9 +157,10 @@ export default async function GroupPage({ params, searchParams }: Props) {
                 </span>
               </div>
             </div>
-            {/* Invite code + settings */}
+            {/* Invite code + member actions + settings */}
             <div className="flex items-center gap-2">
               <CopyInviteButton code={group.invite_code} />
+              <AddMemberButton groupId={id} inviteCode={group.invite_code} />
               <GroupSettings
                 groupId={id}
                 groupName={group.name}
