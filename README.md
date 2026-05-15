@@ -2,7 +2,7 @@
 
 **Live demo:** https://case2-expense-splitter.vercel.app
 **Repo:** https://github.com/shiv1704/case2_expense-splitter
-**Demo video:** *(to be added)*
+**Demo video:** https://www.loom.com/share/e88f88d7649744b39a3f73fd96cd82c2
 
 ---
 
